@@ -175,7 +175,12 @@ public final class EmulationFragment extends Fragment implements SurfaceHolder.C
 	public void surfaceChanged(SurfaceHolder holder, int format, int width, int height)
 	{
 		Log.debug("[EmulationFragment] Surface changed. Resolution: " + width + "x" + height);
-        holder.setFixedSize(width,width);
+
+		if( height > width )
+		{
+			holder.setFixedSize(width,width);
+		}
+
 		mSurface = holder.getSurface();
 		NativeLibrary.SurfaceChanged(mSurface);
 	}
