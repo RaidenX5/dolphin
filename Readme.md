@@ -29,7 +29,7 @@ Please read the [FAQ](https://dolphin-emu.org/docs/faq/) before using Dolphin.
 * OS
     * Android (5.0 Lollipop or higher).
 * Processor
-    * An ARM processor with support for 64-bit applications. (An Intel x86 processor could also work in theory, but no known x86 devices support 64-bit applications.)
+    * A processor with support for 64-bit applications (either ARMv8 or x86-64).
 * Graphics
     * A graphics processor that supports OpenGL ES 3.0 or higher. Performance varies heavily with [driver quality](https://dolphin-emu.org/blog/2013/09/26/dolphin-emulator-and-opengl-drivers-hall-fameshame/).
     * A graphics processor that supports standard desktop OpenGL features is recommended for best performance.
@@ -41,7 +41,7 @@ Dolphin can only be installed on devices that satisfy the above requirements. At
 Use the solution file `Source/dolphin-emu.sln` to build Dolphin on Windows.
 Visual Studio 2015 Update 2 is a hard requirement. Other compilers might be
 able to build Dolphin on Windows but have not been tested and are not
-recommended to be used. Git and Windows 10 SDK 10.0.10586.0 must be installed.
+recommended to be used. Git must be installed when building.
 
 An installer can be created by using the `Installer.nsi` script in the
 Installer directory. This will require the Nullsoft Scriptable Install System
