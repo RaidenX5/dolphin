@@ -279,6 +279,13 @@ std::vector<u8> TicketReader::GetRawTicketView(u32 ticket_num) const
   return view;
 }
 
+std::string TicketReader::GetIssuer() const
+{
+  const char* bytes =
+      reinterpret_cast<const char*>(m_bytes.data() + offsetof(Ticket, signature_issuer));
+  return std::string(bytes, strnlen(bytes, sizeof(Ticket::signature_issuer)));
+}
+
 u32 TicketReader::GetDeviceId() const
 {
   return Common::swap32(m_bytes.data() + offsetof(Ticket, device_id));
@@ -303,8 +310,12 @@ std::vector<u8> TicketReader::GetTitleKey() const
              GetTitleId(), index);
   }
 
+  const bool is_rvt = (GetIssuer() == "Root-CA00000002-XS00000006");
+  const HLE::IOSC::ConsoleType console_type =
+      is_rvt ? HLE::IOSC::ConsoleType::RVT : HLE::IOSC::ConsoleType::Retail;
+
   std::vector<u8> key(16);
-  HLE::IOSC iosc;
+  HLE::IOSC iosc(console_type);
   iosc.Decrypt(common_key_handle, iv, &m_bytes[offsetof(Ticket, title_key)], 16, key.data(),
                HLE::PID_ES);
   return key;
@@ -423,14 +434,32 @@ std::string SharedContentMap::AddSharedContent(const std::array<u8, 20>& sha1)
   entry.sha1 = sha1;
   m_entries.push_back(entry);
 
-  File::CreateFullPath(m_file_path);
-
-  File::IOFile file(m_file_path, "ab");
-  file.WriteArray(&entry, 1);
-
+  WriteEntries();
   filename = Common::RootUserPath(m_root) + StringFromFormat("/shared1/%s.app", id.c_str());
   m_last_id++;
   return filename;
+}
+
+bool SharedContentMap::DeleteSharedContent(const std::array<u8, 20>& sha1)
+{
+  m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(),
+                                 [&sha1](const auto& entry) { return entry.sha1 == sha1; }),
+                  m_entries.end());
+  return WriteEntries();
+}
+
+bool SharedContentMap::WriteEntries() const
+{
+  // Temporary files in ES are only 12 characters long (excluding /tmp/).
+  const std::string temp_path = Common::RootUserPath(m_root) + "/tmp/shared1/cont";
+  File::CreateFullPath(temp_path);
+
+  // Atomically write the new content map.
+  File::IOFile file(temp_path, "w+b");
+  if (!file.WriteArray(m_entries.data(), m_entries.size()))
+    return false;
+  File::CreateFullPath(m_file_path);
+  return File::RenameSync(temp_path, m_file_path);
 }
 
 static std::pair<u32, u64> ReadUidSysEntry(File::IOFile& file)

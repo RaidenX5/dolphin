@@ -189,6 +189,7 @@ public:
   // more than just one ticket and generate ticket views for them, so we implement it too.
   std::vector<u8> GetRawTicketView(u32 ticket_num) const;
 
+  std::string GetIssuer() const;
   u32 GetDeviceId() const;
   u64 GetTitleId() const;
   std::vector<u8> GetTitleKey() const;
@@ -212,9 +213,12 @@ public:
 
   std::string GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const;
   std::string AddSharedContent(const std::array<u8, 20>& sha1);
+  bool DeleteSharedContent(const std::array<u8, 20>& sha1);
   std::vector<std::array<u8, 20>> GetHashes() const;
 
 private:
+  bool WriteEntries() const;
+
   struct Entry;
   Common::FromWhichRoot m_root;
   u32 m_last_id = 0;
