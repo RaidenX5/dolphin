@@ -8,13 +8,16 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
+#include <map>
 #include <string>
 #include <vector>
 
-#include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/NandPaths.h"
 #include "DiscIO/Enums.h"
+
+class PointerWrap;
 
 namespace IOS
 {
@@ -181,6 +184,7 @@ public:
   void DoState(PointerWrap& p);
 
   const std::vector<u8>& GetRawTicket() const;
+  std::vector<u8> GetRawTicket(u64 ticket_id) const;
   size_t GetNumberOfTickets() const;
 
   // Returns a "raw" ticket view, without byte swapping. Intended for use from ES.

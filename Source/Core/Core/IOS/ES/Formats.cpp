@@ -21,6 +21,7 @@
 #include "Common/StringUtil.h"
 #include "Common/Swap.h"
 #include "Core/IOS/Device.h"
+#include "Core/IOS/IOS.h"
 #include "Core/IOS/IOSC.h"
 
 namespace IOS
@@ -259,6 +260,18 @@ size_t TicketReader::GetNumberOfTickets() const
 const std::vector<u8>& TicketReader::GetRawTicket() const
 {
   return m_bytes;
+}
+
+std::vector<u8> TicketReader::GetRawTicket(u64 ticket_id_to_find) const
+{
+  for (size_t i = 0; i < GetNumberOfTickets(); ++i)
+  {
+    const auto ticket_begin = m_bytes.begin() + sizeof(IOS::ES::Ticket) * i;
+    const u64 ticket_id = Common::swap64(&*ticket_begin + offsetof(IOS::ES::Ticket, ticket_id));
+    if (ticket_id == ticket_id_to_find)
+      return std::vector<u8>(ticket_begin, ticket_begin + sizeof(IOS::ES::Ticket));
+  }
+  return {};
 }
 
 std::vector<u8> TicketReader::GetRawTicketView(u32 ticket_num) const
