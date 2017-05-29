@@ -477,37 +477,17 @@ if(USE_X11)
 
   pkg_check_modules(X11_INPUT REQUIRED xi>=1.5.0)
 endif()
+
 if(ENCODE_FRAMEDUMPS)
-  check_libav()
-  if(LIBAV_FOUND)
-    LIST(APPEND LIBS ${LIBAV_LDFLAGS})
+  if(WIN32)
+    set(FFMPEG_DIR Externals/ffmpeg)
   endif()
-
-endif()
-
-if(NOT ANDROID)
-  set(PORTAUDIO_FOUND TRUE)
-  add_definitions(-DHAVE_PORTAUDIO=1)
-
-  if(NOT APPLE)
-      set(CMAKE_REQUIRED_LIBRARIES portaudio)
-      CHECK_CXX_SOURCE_RUNS(
-        "#include <portaudio.h>
-      int main(int argc, char **argv)
-      { if(Pa_GetVersion() >= 1890) return 0; else return 1; }"
-      SYSTEM_PORTAUDIO)
-    unset(CMAKE_REQUIRED_LIBRARIES)
-  endif()
-  if(SYSTEM_PORTAUDIO AND NOT APPLE)
-    message(STATUS "Using shared PortAudio for mic support")
-    set(PORTAUDIO_LIBRARIES portaudio)
+  find_package(FFmpeg COMPONENTS avcodec avformat avutil swscale)
+  if(FFmpeg_FOUND)
+    message(STATUS "libav/ffmpeg found, enabling AVI frame dumps")
+    add_definitions(-DHAVE_FFMPEG)
   else()
-    message(STATUS "Using static PortAudio from Externals for mic support")
-    option(PA_USE_ASIO "Enable PortAudio support for ASIO" OFF)
-    option(PA_USE_DS "Enable PortAudio support for DirectSound" OFF)
-    option(PA_USE_WDMKS "Enable PortAudio support for WDMKS" OFF)
-    add_subdirectory(Externals/portaudio EXCLUDE_FROM_ALL)
-    set(PORTAUDIO_LIBRARIES portaudio_static)
+    message(STATUS "libav/ffmpeg not found, disabling AVI frame dumps")
   endif()
 endif()
 
@@ -653,6 +633,8 @@ find_package(OpenAL)
 # Unable to use system soundtouch library: We require shorts, not floats.
 add_subdirectory(Externals/soundtouch)
 include_directories(Externals)
+
+add_subdirectory(Externals/cubeb EXCLUDE_FROM_ALL)
 
 if(NOT ANDROID)
   add_definitions(-D__LIBUSB__)
