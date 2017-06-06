@@ -1,4 +1,5 @@
 find_package(Qt5Widgets REQUIRED)
+set_property(TARGET Qt5::Core PROPERTY INTERFACE_COMPILE_FEATURES "")
 message(STATUS "Found Qt version ${Qt5Core_VERSION}")
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -31,7 +32,6 @@ set(SRCS
   Config/Mapping/WiimoteEmuExtension.cpp
   Config/Mapping/WiimoteEmuGeneral.cpp
   Config/Mapping/WiimoteEmuMotionControl.cpp
-  Config/PathDialog.cpp
   Config/PropertiesDialog.cpp
   Config/SettingsWindow.cpp
   GameList/GameFile.cpp
@@ -39,8 +39,11 @@ set(SRCS
   GameList/GameListModel.cpp
   GameList/GameTracker.cpp
   GameList/ListProxyModel.cpp
+  QtUtils/DoubleClickEventFilter.cpp
+  QtUtils/ElidedButton.cpp
   Settings/GeneralPane.cpp
   Settings/InterfacePane.cpp
+  Settings/PathPane.cpp
 )
 
 list(APPEND LIBS core uicommon)

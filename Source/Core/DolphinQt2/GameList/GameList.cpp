@@ -22,6 +22,7 @@
 #include "DolphinQt2/Config/PropertiesDialog.h"
 #include "DolphinQt2/GameList/GameList.h"
 #include "DolphinQt2/GameList/ListProxyModel.h"
+#include "DolphinQt2/QtUtils/DoubleClickEventFilter.h"
 #include "DolphinQt2/Settings.h"
 
 static bool CompressCB(const std::string&, float, void*);
@@ -30,6 +31,8 @@ GameList::GameList(QWidget* parent) : QStackedWidget(parent)
 {
   m_model = new GameListModel(this);
   m_table_proxy = new QSortFilterProxyModel(this);
+  m_table_proxy->setSortCaseSensitivity(Qt::CaseInsensitive);
+  m_table_proxy->setSortRole(Qt::InitialSortOrderRole);
   m_table_proxy->setSourceModel(m_model);
   m_list_proxy = new ListProxyModel(this);
   m_list_proxy->setSourceModel(m_model);
@@ -40,15 +43,15 @@ GameList::GameList(QWidget* parent) : QStackedWidget(parent)
 
   connect(m_table, &QTableView::doubleClicked, this, &GameList::GameSelected);
   connect(m_list, &QListView::doubleClicked, this, &GameList::GameSelected);
-  connect(this, &GameList::DirectoryAdded, m_model, &GameListModel::DirectoryAdded);
-  connect(this, &GameList::DirectoryRemoved, m_model, &GameListModel::DirectoryRemoved);
+  connect(&Settings::Instance(), &Settings::PathAdded, m_model, &GameListModel::DirectoryAdded);
+  connect(&Settings::Instance(), &Settings::PathRemoved, m_model, &GameListModel::DirectoryRemoved);
   connect(m_model, &QAbstractItemModel::rowsInserted, this, &GameList::ConsiderViewChange);
   connect(m_model, &QAbstractItemModel::rowsRemoved, this, &GameList::ConsiderViewChange);
 
   addWidget(m_table);
   addWidget(m_list);
   addWidget(m_empty);
-  m_prefer_table = Settings().GetPreferredView();
+  m_prefer_table = Settings::Instance().GetPreferredView();
   ConsiderViewChange();
 }
 
@@ -68,15 +71,16 @@ void GameList::MakeTableView()
 
   connect(m_table, &QTableView::customContextMenuRequested, this, &GameList::ShowContextMenu);
 
-  m_table->setColumnHidden(GameListModel::COL_PLATFORM, !Settings().PlatformVisible());
-  m_table->setColumnHidden(GameListModel::COL_ID, !Settings().IDVisible());
-  m_table->setColumnHidden(GameListModel::COL_BANNER, !Settings().BannerVisible());
-  m_table->setColumnHidden(GameListModel::COL_TITLE, !Settings().TitleVisible());
-  m_table->setColumnHidden(GameListModel::COL_DESCRIPTION, !Settings().DescriptionVisible());
-  m_table->setColumnHidden(GameListModel::COL_MAKER, !Settings().MakerVisible());
-  m_table->setColumnHidden(GameListModel::COL_SIZE, !Settings().SizeVisible());
-  m_table->setColumnHidden(GameListModel::COL_COUNTRY, !Settings().CountryVisible());
-  m_table->setColumnHidden(GameListModel::COL_RATING, !Settings().StateVisible());
+  auto& settings = Settings::Instance();
+  m_table->setColumnHidden(GameListModel::COL_PLATFORM, !settings.PlatformVisible());
+  m_table->setColumnHidden(GameListModel::COL_ID, !settings.IDVisible());
+  m_table->setColumnHidden(GameListModel::COL_BANNER, !settings.BannerVisible());
+  m_table->setColumnHidden(GameListModel::COL_TITLE, !settings.TitleVisible());
+  m_table->setColumnHidden(GameListModel::COL_DESCRIPTION, !settings.DescriptionVisible());
+  m_table->setColumnHidden(GameListModel::COL_MAKER, !settings.MakerVisible());
+  m_table->setColumnHidden(GameListModel::COL_SIZE, !settings.SizeVisible());
+  m_table->setColumnHidden(GameListModel::COL_COUNTRY, !settings.CountryVisible());
+  m_table->setColumnHidden(GameListModel::COL_RATING, !settings.StateVisible());
 
   QHeaderView* hor_header = m_table->horizontalHeader();
   hor_header->setSectionResizeMode(GameListModel::COL_PLATFORM, QHeaderView::ResizeToContents);
@@ -95,9 +99,18 @@ void GameList::MakeTableView()
 void GameList::MakeEmptyView()
 {
   m_empty = new QLabel(this);
-  m_empty->setText(tr("Dolphin did not find any game files.\n"
-                      "Open the Paths dialog to add game folders."));
+  m_empty->setText(tr("Dolphin could not find any GameCube/Wii ISOs or WADs.\n"
+                      "Double-click here to set a games directory..."));
   m_empty->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+
+  auto event_filter = new DoubleClickEventFilter{};
+  m_empty->installEventFilter(event_filter);
+  connect(event_filter, &DoubleClickEventFilter::doubleClicked, [this] {
+    auto current_dir = QDir::currentPath();
+    auto dir = QFileDialog::getExistingDirectory(this, tr("Select a Directory"), current_dir);
+    if (!dir.isEmpty())
+      Settings::Instance().AddPath(dir);
+  });
 }
 
 void GameList::MakeListView()
@@ -282,7 +295,7 @@ void GameList::UninstallWAD()
 
 void GameList::SetDefaultISO()
 {
-  Settings().SetDefaultGame(GetSelectedGame());
+  Settings::Instance().SetDefaultGame(GetSelectedGame());
 }
 
 void GameList::OpenContainingFolder()
@@ -362,7 +375,7 @@ QString GameList::GetSelectedGame() const
 void GameList::SetPreferredView(bool table)
 {
   m_prefer_table = table;
-  Settings().SetPreferredView(table);
+  Settings::Instance().SetPreferredView(table);
   ConsiderViewChange();
 }
 

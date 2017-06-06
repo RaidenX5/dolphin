@@ -169,9 +169,9 @@ void CFrame::BindMenuBarEvents()
   Bind(wxEVT_MENU, &CFrame::OnMemcard, this, IDM_MEMCARD);
   Bind(wxEVT_MENU, &CFrame::OnImportSave, this, IDM_IMPORT_SAVE);
   Bind(wxEVT_MENU, &CFrame::OnExportAllSaves, this, IDM_EXPORT_ALL_SAVE);
-  Bind(wxEVT_MENU, &CFrame::OnLoadGameCubeBIOSJAP, this, IDM_LOAD_GC_BIOS_JAP);
-  Bind(wxEVT_MENU, &CFrame::OnLoadGameCubeBIOSUSA, this, IDM_LOAD_GC_BIOS_USA);
-  Bind(wxEVT_MENU, &CFrame::OnLoadGameCubeBIOSEUR, this, IDM_LOAD_GC_BIOS_EUR);
+  Bind(wxEVT_MENU, &CFrame::OnLoadGameCubeIPLJAP, this, IDM_LOAD_GC_IPL_JAP);
+  Bind(wxEVT_MENU, &CFrame::OnLoadGameCubeIPLUSA, this, IDM_LOAD_GC_IPL_USA);
+  Bind(wxEVT_MENU, &CFrame::OnLoadGameCubeIPLEUR, this, IDM_LOAD_GC_IPL_EUR);
   Bind(wxEVT_MENU, &CFrame::OnShowCheatsWindow, this, IDM_CHEATS);
   Bind(wxEVT_MENU, &CFrame::OnNetPlay, this, IDM_NETPLAY);
   Bind(wxEVT_MENU, &CFrame::OnInstallWAD, this, IDM_MENU_INSTALL_WAD);
@@ -309,16 +309,8 @@ void CFrame::BootGame(const std::string& filename)
     }
     else
     {
-      if (!SConfig::GetInstance().m_LastFilename.empty() &&
-          File::Exists(SConfig::GetInstance().m_LastFilename))
-      {
-        bootfile = SConfig::GetInstance().m_LastFilename;
-      }
-      else
-      {
-        m_game_list_ctrl->BrowseForDirectory();
-        return;
-      }
+      m_game_list_ctrl->BrowseForDirectory();
+      return;
     }
   }
   if (!bootfile.empty())
@@ -818,7 +810,6 @@ void CFrame::DoStop()
   // don't let this function run again until it finishes, or is aborted.
   m_confirm_stop = true;
 
-  m_is_game_loading = false;
   if (Core::GetState() != Core::State::Uninitialized || m_render_parent != nullptr)
   {
 #if defined __WXGTK__
@@ -919,6 +910,7 @@ bool CFrame::TriggerSTMPowerEvent()
 void CFrame::OnStopped()
 {
   m_confirm_stop = false;
+  m_is_game_loading = false;
   m_tried_graceful_shutdown = false;
 
   UninhibitScreensaver();
@@ -1175,17 +1167,17 @@ void CFrame::OnMemcard(wxCommandEvent& WXUNUSED(event))
   HotkeyManagerEmu::Enable(true);
 }
 
-void CFrame::OnLoadGameCubeBIOSJAP(wxCommandEvent&)
+void CFrame::OnLoadGameCubeIPLJAP(wxCommandEvent&)
 {
   StartGame("", SConfig::BOOT_BS2_JAP);
 }
 
-void CFrame::OnLoadGameCubeBIOSUSA(wxCommandEvent&)
+void CFrame::OnLoadGameCubeIPLUSA(wxCommandEvent&)
 {
   StartGame("", SConfig::BOOT_BS2_USA);
 }
 
-void CFrame::OnLoadGameCubeBIOSEUR(wxCommandEvent&)
+void CFrame::OnLoadGameCubeIPLEUR(wxCommandEvent&)
 {
   StartGame("", SConfig::BOOT_BS2_EUR);
 }
@@ -1497,13 +1489,13 @@ void CFrame::UpdateGUI()
   // Misc
   GetMenuBar()->FindItem(IDM_CHANGE_DISC)->Enable(Initialized);
   GetMenuBar()
-      ->FindItem(IDM_LOAD_GC_BIOS_JAP)
+      ->FindItem(IDM_LOAD_GC_IPL_JAP)
       ->Enable(!Initialized && File::Exists(SConfig::GetInstance().GetBootROMPath(JAP_DIR)));
   GetMenuBar()
-      ->FindItem(IDM_LOAD_GC_BIOS_USA)
+      ->FindItem(IDM_LOAD_GC_IPL_USA)
       ->Enable(!Initialized && File::Exists(SConfig::GetInstance().GetBootROMPath(USA_DIR)));
   GetMenuBar()
-      ->FindItem(IDM_LOAD_GC_BIOS_EUR)
+      ->FindItem(IDM_LOAD_GC_IPL_EUR)
       ->Enable(!Initialized && File::Exists(SConfig::GetInstance().GetBootROMPath(EUR_DIR)));
   if (DiscIO::CNANDContentManager::Access()
           .GetNANDLoader(TITLEID_SYSMENU, Common::FROM_CONFIGURED_ROOT)
@@ -1544,15 +1536,6 @@ void CFrame::UpdateGUI()
     {
       // Prepare to load Default ISO, enable play button
       if (!SConfig::GetInstance().m_strDefaultISO.empty())
-      {
-        GetToolBar()->EnableTool(IDM_PLAY, true);
-        GetMenuBar()->FindItem(IDM_PLAY)->Enable();
-        GetMenuBar()->FindItem(IDM_RECORD)->Enable();
-        GetMenuBar()->FindItem(IDM_PLAY_RECORD)->Enable();
-      }
-      // Prepare to load last selected file, enable play button
-      else if (!SConfig::GetInstance().m_LastFilename.empty() &&
-               File::Exists(SConfig::GetInstance().m_LastFilename))
       {
         GetToolBar()->EnableTool(IDM_PLAY, true);
         GetMenuBar()->FindItem(IDM_PLAY)->Enable();

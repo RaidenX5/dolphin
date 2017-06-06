@@ -5,12 +5,14 @@
 #include <cinttypes>
 #include <climits>
 #include <memory>
+#include <optional>
 
 #include "AudioCommon/AudioCommon.h"
 
 #include "Common/CDUtils.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -21,6 +23,7 @@
 #include "Core/Analytics.h"
 #include "Core/Boot/Boot.h"
 #include "Core/Boot/Boot_DOL.h"
+#include "Core/Config/Config.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/FifoPlayer/FifoDataFile.h"
@@ -87,6 +90,8 @@ void SConfig::SaveSettings()
   SaveUSBPassthroughSettings(ini);
 
   ini.Save(File::GetUserPath(F_DOLPHINCONFIG_IDX));
+
+  Config::Save();
 }
 
 namespace
@@ -109,7 +114,6 @@ void SConfig::SaveGeneralSettings(IniFile& ini)
   IniFile::Section* general = ini.GetOrCreateSection("General");
 
   // General
-  general->Set("LastFilename", m_LastFilename);
   general->Set("ShowLag", m_ShowLag);
   general->Set("ShowFrameCount", m_ShowFrameCount);
 
@@ -152,7 +156,6 @@ void SConfig::SaveInterfaceSettings(IniFile& ini)
   interface->Set("UsePanicHandlers", bUsePanicHandlers);
   interface->Set("OnScreenDisplayMessages", bOnScreenDisplayMessages);
   interface->Set("HideCursor", bHideCursor);
-  interface->Set("AutoHideCursor", bAutoHideCursor);
   interface->Set("MainWindowPosX", iPosX);
   interface->Set("MainWindowPosY", iPosY);
   interface->Set("MainWindowWidth", iWidth);
@@ -395,6 +398,8 @@ void SConfig::SaveSettingsToSysconf()
 
 void SConfig::LoadSettings()
 {
+  Config::Load();
+
   INFO_LOG(BOOT, "Loading Settings from %s", File::GetUserPath(F_DOLPHINCONFIG_IDX).c_str());
   IniFile ini;
   ini.Load(File::GetUserPath(F_DOLPHINCONFIG_IDX));
@@ -418,7 +423,6 @@ void SConfig::LoadGeneralSettings(IniFile& ini)
 {
   IniFile::Section* general = ini.GetOrCreateSection("General");
 
-  general->Get("LastFilename", &m_LastFilename);
   general->Get("ShowLag", &m_ShowLag, false);
   general->Get("ShowFrameCount", &m_ShowFrameCount, false);
 #ifdef USE_GDBSTUB
@@ -459,7 +463,6 @@ void SConfig::LoadInterfaceSettings(IniFile& ini)
   interface->Get("UsePanicHandlers", &bUsePanicHandlers, true);
   interface->Get("OnScreenDisplayMessages", &bOnScreenDisplayMessages, true);
   interface->Get("HideCursor", &bHideCursor, false);
-  interface->Get("AutoHideCursor", &bAutoHideCursor, false);
   interface->Get("MainWindowPosX", &iPosX, INT_MIN);
   interface->Get("MainWindowPosY", &iPosY, INT_MIN);
   interface->Get("MainWindowWidth", &iWidth, -1);
@@ -721,9 +724,8 @@ void SConfig::ResetRunningGameMetadata()
 void SConfig::SetRunningGameMetadata(const DiscIO::IVolume& volume,
                                      const DiscIO::Partition& partition)
 {
-  u64 title_id = 0;
-  volume.GetTitleID(&title_id, partition);
-  SetRunningGameMetadata(volume.GetGameID(partition), title_id, volume.GetRevision(partition),
+  SetRunningGameMetadata(volume.GetGameID(partition), volume.GetTitleID(partition).value_or(0),
+                         volume.GetRevision(partition).value_or(0),
                          Core::TitleDatabase::TitleType::Other);
 }
 
@@ -1121,7 +1123,7 @@ IniFile SConfig::LoadGameIni() const
   return LoadGameIni(GetGameID(), m_revision);
 }
 
-IniFile SConfig::LoadDefaultGameIni(const std::string& id, u16 revision)
+IniFile SConfig::LoadDefaultGameIni(const std::string& id, std::optional<u16> revision)
 {
   IniFile game_ini;
   for (const std::string& filename : GetGameIniFilenames(id, revision))
@@ -1129,7 +1131,7 @@ IniFile SConfig::LoadDefaultGameIni(const std::string& id, u16 revision)
   return game_ini;
 }
 
-IniFile SConfig::LoadLocalGameIni(const std::string& id, u16 revision)
+IniFile SConfig::LoadLocalGameIni(const std::string& id, std::optional<u16> revision)
 {
   IniFile game_ini;
   for (const std::string& filename : GetGameIniFilenames(id, revision))
@@ -1137,7 +1139,7 @@ IniFile SConfig::LoadLocalGameIni(const std::string& id, u16 revision)
   return game_ini;
 }
 
-IniFile SConfig::LoadGameIni(const std::string& id, u16 revision)
+IniFile SConfig::LoadGameIni(const std::string& id, std::optional<u16> revision)
 {
   IniFile game_ini;
   for (const std::string& filename : GetGameIniFilenames(id, revision))
@@ -1148,7 +1150,8 @@ IniFile SConfig::LoadGameIni(const std::string& id, u16 revision)
 }
 
 // Returns all possible filenames in ascending order of priority
-std::vector<std::string> SConfig::GetGameIniFilenames(const std::string& id, u16 revision)
+std::vector<std::string> SConfig::GetGameIniFilenames(const std::string& id,
+                                                      std::optional<u16> revision)
 {
   std::vector<std::string> filenames;
 
@@ -1166,7 +1169,8 @@ std::vector<std::string> SConfig::GetGameIniFilenames(const std::string& id, u16
   filenames.push_back(id + ".ini");
 
   // INIs with specific revisions
-  filenames.push_back(id + StringFromFormat("r%d", revision) + ".ini");
+  if (revision)
+    filenames.push_back(id + StringFromFormat("r%d", *revision) + ".ini");
 
   return filenames;
 }

@@ -8,6 +8,7 @@
 #include <locale>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -211,7 +212,7 @@ std::map<Language, std::string> CVolumeDirectory::GetLongNames() const
 {
   std::string name = GetInternalName();
   if (name.empty())
-    return {{}};
+    return {};
   return {{Language::LANGUAGE_UNKNOWN, name}};
 }
 
@@ -228,12 +229,6 @@ void CVolumeDirectory::SetName(const std::string& name)
   size_t length = std::min(name.length(), MAX_NAME_LENGTH);
   memcpy(&m_disk_header[0x20], name.c_str(), length);
   m_disk_header[length + 0x20] = 0;
-}
-
-u64 CVolumeDirectory::GetFSTSize(const Partition& partition) const
-{
-  // Not implemented
-  return 0;
 }
 
 std::string CVolumeDirectory::GetApploaderDate(const Partition& partition) const

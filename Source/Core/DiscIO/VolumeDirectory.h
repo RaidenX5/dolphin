@@ -6,6 +6,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -48,13 +49,14 @@ public:
 
   std::string GetMakerID(const Partition& partition = PARTITION_NONE) const override;
 
-  u16 GetRevision(const Partition& partition = PARTITION_NONE) const override { return 0; }
+  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const override
+  {
+    return {};
+  }
   std::string GetInternalName(const Partition& partition = PARTITION_NONE) const override;
   std::map<Language, std::string> GetLongNames() const override;
   std::vector<u32> GetBanner(int* width, int* height) const override;
   void SetName(const std::string&);
-
-  u64 GetFSTSize(const Partition& partition = PARTITION_NONE) const override;
 
   std::string GetApploaderDate(const Partition& partition = PARTITION_NONE) const override;
   Platform GetVolumeType() const override;

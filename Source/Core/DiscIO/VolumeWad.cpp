@@ -7,6 +7,7 @@
 #include <locale>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,11 +30,11 @@ CVolumeWAD::CVolumeWAD(std::unique_ptr<IBlobReader> reader) : m_reader(std::move
   _assert_(m_reader);
 
   // Source: http://wiibrew.org/wiki/WAD_files
-  m_reader->ReadSwapped(0x00, &m_hdr_size);
-  m_reader->ReadSwapped(0x08, &m_cert_size);
-  m_reader->ReadSwapped(0x10, &m_tick_size);
-  m_reader->ReadSwapped(0x14, &m_tmd_size);
-  m_reader->ReadSwapped(0x18, &m_data_size);
+  m_hdr_size = m_reader->ReadSwapped<u32>(0x00).value_or(0);
+  m_cert_size = m_reader->ReadSwapped<u32>(0x08).value_or(0);
+  m_tick_size = m_reader->ReadSwapped<u32>(0x10).value_or(0);
+  m_tmd_size = m_reader->ReadSwapped<u32>(0x14).value_or(0);
+  m_data_size = m_reader->ReadSwapped<u32>(0x18).value_or(0);
 
   m_offset = Common::AlignUp(m_hdr_size, 0x40) + Common::AlignUp(m_cert_size, 0x40);
   m_tmd_offset = Common::AlignUp(m_hdr_size, 0x40) + Common::AlignUp(m_cert_size, 0x40) +
@@ -107,15 +108,15 @@ std::string CVolumeWAD::GetMakerID(const Partition& partition) const
   return DecodeString(temp);
 }
 
-bool CVolumeWAD::GetTitleID(u64* buffer, const Partition& partition) const
+std::optional<u64> CVolumeWAD::GetTitleID(const Partition& partition) const
 {
-  return ReadSwapped(m_offset + 0x01DC, buffer, partition);
+  return ReadSwapped<u64>(m_offset + 0x01DC, partition);
 }
 
-u16 CVolumeWAD::GetRevision(const Partition& partition) const
+std::optional<u16> CVolumeWAD::GetRevision(const Partition& partition) const
 {
   if (!m_tmd.IsValid())
-    return 0;
+    return {};
 
   return m_tmd.GetTitleVersion();
 }
@@ -141,11 +142,11 @@ std::vector<u32> CVolumeWAD::GetBanner(int* width, int* height) const
   *width = 0;
   *height = 0;
 
-  u64 title_id;
-  if (!GetTitleID(&title_id))
+  const std::optional<u64> title_id = GetTitleID();
+  if (!title_id)
     return std::vector<u32>();
 
-  return GetWiiBanner(width, height, title_id);
+  return GetWiiBanner(width, height, *title_id);
 }
 
 BlobType CVolumeWAD::GetBlobType() const

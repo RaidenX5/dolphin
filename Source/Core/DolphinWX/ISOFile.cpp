@@ -108,9 +108,9 @@ GameListItem::GameListItem(const std::string& _rFileName, const Core::TitleDatab
       m_VolumeSize = volume->GetSize();
 
       m_game_id = volume->GetGameID();
-      volume->GetTitleID(&m_title_id);
-      m_disc_number = volume->GetDiscNumber();
-      m_Revision = volume->GetRevision();
+      m_title_id = volume->GetTitleID().value_or(0);
+      m_disc_number = volume->GetDiscNumber().value_or(0);
+      m_Revision = volume->GetRevision().value_or(0);
 
       std::vector<u32> buffer = volume->GetBanner(&m_ImageWidth, &m_ImageHeight);
       ReadVolumeBanner(buffer, m_ImageWidth, m_ImageHeight);
