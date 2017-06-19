@@ -2,12 +2,13 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "Core/IOS/Network/NCD/Config.h"
+#include "Core/IOS/Network/NCD/WiiNetConfig.h"
 
 #include <cstring>
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Core/HW/Memmap.h"

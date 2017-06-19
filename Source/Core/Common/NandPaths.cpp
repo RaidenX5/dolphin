@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
@@ -84,8 +85,7 @@ std::string EscapeFileName(const std::string& filename)
 
 std::string EscapePath(const std::string& path)
 {
-  std::vector<std::string> split_strings;
-  SplitString(path, '/', split_strings);
+  const std::vector<std::string> split_strings = SplitString(path, '/');
 
   std::vector<std::string> escaped_split_strings;
   escaped_split_strings.reserve(split_strings.size());

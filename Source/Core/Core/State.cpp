@@ -2,6 +2,8 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/State.h"
+
 #include <lzo/lzo1x.h>
 #include <map>
 #include <mutex>
@@ -13,6 +15,7 @@
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/MsgHandler.h"
 #include "Common/ScopeGuard.h"
@@ -30,7 +33,6 @@
 #include "Core/Movie.h"
 #include "Core/NetPlayClient.h"
 #include "Core/PowerPC/PowerPC.h"
-#include "Core/State.h"
 
 #include "VideoCommon/AVIDump.h"
 #include "VideoCommon/OnScreenDisplay.h"
@@ -156,8 +158,7 @@ static std::string DoState(PointerWrap& p)
     return version_created_by;
   }
 
-  bool is_wii =
-      SConfig::GetInstance().bWii || SConfig::GetInstance().m_BootType == SConfig::BOOT_MIOS;
+  bool is_wii = SConfig::GetInstance().bWii || SConfig::GetInstance().m_is_mios;
   const bool is_wii_currently = is_wii;
   p.Do(is_wii);
   if (is_wii != is_wii_currently)

@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -13,6 +14,7 @@
 #include <wx/frame.h>
 #include <wx/image.h>
 #include <wx/panel.h>
+#include <wx/string.h>
 #include <wx/timer.h>
 
 #include "Common/CommonTypes.h"
@@ -27,6 +29,8 @@
 #ifdef __APPLE__
 #include <IOKit/pwr_mgt/IOPMLib.h>
 #endif
+
+struct BootParameters;
 
 // Class declarations
 class CGameListCtrl;
@@ -184,7 +188,7 @@ private:
   void InitializeTASDialogs();
   void InitializeCoreCallbacks();
 
-  void StartGame(const std::string& filename, SConfig::EBootBS2 type = SConfig::BOOT_DEFAULT);
+  void StartGame(std::unique_ptr<BootParameters> boot);
   void SetDebuggerStartupParameters() const;
 
   // Utility
@@ -251,7 +255,7 @@ private:
   bool TriggerSTMPowerEvent();
   void OnStopped();
   void OnRenderWindowSizeRequest(int width, int height);
-  void UpdateTitle(const std::string& str);
+  void UpdateTitle(const wxString& str);
   static void ConnectWiimote(int wm_idx, bool connect);
 
   // Event functions

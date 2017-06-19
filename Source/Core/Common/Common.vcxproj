@@ -63,6 +63,7 @@
     <ClInclude Include="ENetUtil.h" />
     <ClInclude Include="Event.h" />
     <ClInclude Include="FifoQueue.h" />
+    <ClInclude Include="File.h" />
     <ClInclude Include="FileSearch.h" />
     <ClInclude Include="FileUtil.h" />
     <ClInclude Include="FixedSizeQueue.h" />
@@ -121,8 +122,10 @@
     <ClInclude Include="GL\GLInterface\WGL.h" />
     <ClInclude Include="GL\GLUtil.h" />
     <ClInclude Include="Hash.h" />
+    <ClInclude Include="HttpRequest.h" />
     <ClInclude Include="IniFile.h" />
     <ClInclude Include="JitRegister.h" />
+    <ClInclude Include="LdrWatcher.h" />
     <ClInclude Include="LinearDiskCache.h" />
     <ClInclude Include="MathUtil.h" />
     <ClInclude Include="MD5.h" />
@@ -161,10 +164,12 @@
     <ClCompile Include="CDUtils.cpp" />
     <ClCompile Include="ColorUtil.cpp" />
     <ClCompile Include="CommonFuncs.cpp" />
+    <ClCompile Include="CompatPatches.cpp" />
     <ClCompile Include="Config\Config.cpp" />
     <ClCompile Include="Config\Layer.cpp" />
     <ClCompile Include="Config\Section.cpp" />
     <ClCompile Include="ENetUtil.cpp" />
+    <ClCompile Include="File.cpp" />
     <ClCompile Include="FileSearch.cpp" />
     <ClCompile Include="FileUtil.cpp" />
     <ClCompile Include="GekkoDisassembler.cpp" />
@@ -173,8 +178,10 @@
     <ClCompile Include="GL\GLInterface\WGL.cpp" />
     <ClCompile Include="GL\GLUtil.cpp" />
     <ClCompile Include="Hash.cpp" />
+    <ClCompile Include="HttpRequest.cpp" />
     <ClCompile Include="IniFile.cpp" />
     <ClCompile Include="JitRegister.cpp" />
+    <ClCompile Include="LdrWatcher.cpp" />
     <ClCompile Include="Logging\ConsoleListenerWin.cpp" />
     <ClCompile Include="MathUtil.cpp" />
     <ClCompile Include="MD5.cpp" />
@@ -193,7 +200,6 @@
     <ClCompile Include="Thread.cpp" />
     <ClCompile Include="Timer.cpp" />
     <ClCompile Include="TraversalClient.cpp" />
-    <ClCompile Include="ucrtFreadWorkaround.cpp" />
     <ClCompile Include="Version.cpp" />
     <ClCompile Include="x64ABI.cpp" />
     <ClCompile Include="x64CPUDetect.cpp" />

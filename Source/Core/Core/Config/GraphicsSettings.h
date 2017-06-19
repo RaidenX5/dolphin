@@ -47,7 +47,7 @@ extern const ConfigInfo<bool> GFX_INTERNAL_RESOLUTION_FRAME_DUMPS;
 extern const ConfigInfo<bool> GFX_ENABLE_GPU_TEXTURE_DECODING;
 extern const ConfigInfo<bool> GFX_ENABLE_PIXEL_LIGHTING;
 extern const ConfigInfo<bool> GFX_FAST_DEPTH_CALC;
-extern const ConfigInfo<int> GFX_MSAA;
+extern const ConfigInfo<u32> GFX_MSAA;
 extern const ConfigInfo<bool> GFX_SSAA;
 extern const ConfigInfo<int> GFX_EFB_SCALE;
 extern const ConfigInfo<bool> GFX_TEXFMT_OVERLAY_ENABLE;
@@ -101,8 +101,8 @@ extern const ConfigInfo<bool> GFX_HACK_VERTEX_ROUDING;
 extern const ConfigInfo<int> GFX_PROJECTION_HACK;
 extern const ConfigInfo<int> GFX_PROJECTION_HACK_SZNEAR;
 extern const ConfigInfo<int> GFX_PROJECTION_HACK_SZFAR;
-extern const ConfigInfo<int> GFX_PROJECTION_HACK_ZNEAR;
-extern const ConfigInfo<int> GFX_PROJECTION_HACK_ZFAR;
+extern const ConfigInfo<std::string> GFX_PROJECTION_HACK_ZNEAR;
+extern const ConfigInfo<std::string> GFX_PROJECTION_HACK_ZFAR;
 extern const ConfigInfo<bool> GFX_PERF_QUERIES_ENABLE;
 
 }  // namespace Config

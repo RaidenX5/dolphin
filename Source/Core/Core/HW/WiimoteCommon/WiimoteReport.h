@@ -8,6 +8,11 @@
 
 #include "Common/CommonTypes.h"
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4200)
+#endif
+
 typedef std::vector<u8> Report;
 
 // Report defines
@@ -260,7 +265,7 @@ struct wm_guitar_extension
   u8 sy : 6;
   u8 pad2 : 2;  // 1 on gh3, 0 on ghwt
 
-  u8 tb : 5;    // not used in gh3
+  u8 sb : 5;    // not used in gh3
   u8 pad3 : 3;  // always 0
 
   u8 whammy : 5;
@@ -449,6 +454,13 @@ struct wm_report_core_accel
 };
 static_assert(sizeof(wm_report_core_accel) == 5, "Wrong size");
 
+struct wm_report_core_ext8
+{
+  wm_buttons c;
+  u8 ext[8];
+};
+static_assert(sizeof(wm_report_core_ext8) == 10, "Wrong size");
+
 struct wm_report_core_accel_ir12
 {
   wm_buttons c;
@@ -491,3 +503,7 @@ struct wm_speaker_data
 };
 static_assert(sizeof(wm_speaker_data) == 21, "Wrong size");
 #pragma pack(pop)
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

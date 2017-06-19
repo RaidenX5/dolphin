@@ -5,6 +5,7 @@
 #include "Core/HW/DSPHLE/UCodes/UCodes.h"
 
 #include <cstring>
+#include <memory>
 #include <string>
 
 #ifdef _WIN32
@@ -13,10 +14,8 @@
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
 #include "Common/Hash.h"
 #include "Common/Logging/Log.h"
-#include "Common/StringUtil.h"
 #include "Common/Swap.h"
 #include "Core/ConfigManager.h"
 #include "Core/DSP/DSPCodeUtil.h"

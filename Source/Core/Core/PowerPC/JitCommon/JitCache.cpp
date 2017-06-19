@@ -10,8 +10,11 @@
 // locating performance issues.
 
 #include <algorithm>
+#include <array>
 #include <cstring>
+#include <functional>
 #include <map>
+#include <set>
 #include <utility>
 
 #include "Common/CommonTypes.h"
@@ -19,6 +22,7 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
+#include "Core/PowerPC/PPCSymbolDB.h"
 #include "Core/PowerPC/PowerPC.h"
 
 #ifdef _WIN32
@@ -128,7 +132,12 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
     LinkBlock(block);
   }
 
-  JitRegister::Register(block.checkedEntry, block.codeSize, "JIT_PPC_%08x", block.physicalAddress);
+  if (Symbol* symbol = g_symbolDB.GetSymbolFromAddr(block.effectiveAddress))
+    JitRegister::Register(block.checkedEntry, block.codeSize, "JIT_PPC_%s_%08x",
+                          symbol->function_name.c_str(), block.physicalAddress);
+  else
+    JitRegister::Register(block.checkedEntry, block.codeSize, "JIT_PPC_%08x",
+                          block.physicalAddress);
 }
 
 JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, u32 msr)

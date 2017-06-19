@@ -3,18 +3,22 @@
 // Refer to the license.txt file included.
 
 #include "Core/NetPlayServer.h"
+
+#include <algorithm>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <unordered_set>
 #include <vector>
+
 #include "Common/Common.h"
 #include "Common/ENetUtil.h"
 #include "Common/FileUtil.h"
-#include "Common/IniFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"
-#include "Core/HW/EXI/EXI_DeviceIPL.h"
 #include "Core/HW/Sram.h"
 #include "Core/NetPlayClient.h"  //for NetPlayUI
 #include "InputCommon/GCPadStatus.h"
@@ -361,7 +365,7 @@ unsigned int NetPlayServer::OnDisconnect(const Client& player)
         sf::Packet spac;
         spac << (MessageId)NP_MSG_DISABLE_GAME;
         // this thread doesn't need players lock
-        SendToClients(spac, -1);
+        SendToClients(spac, static_cast<PlayerId>(-1));
         break;
       }
     }

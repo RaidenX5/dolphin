@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -30,7 +31,6 @@
 #include "Core/HW/SystemTimers.h"
 #include "Core/Movie.h"
 #include "DiscIO/Enums.h"
-#include "DiscIO/NANDContentLoader.h"
 
 namespace ExpansionInterface
 {

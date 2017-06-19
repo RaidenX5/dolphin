@@ -10,7 +10,9 @@
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
+#include "Common/MsgHandler.h"
 #include "Common/NandPaths.h"
 
 #include "Core/Boot/Boot.h"
@@ -18,7 +20,6 @@
 #include "Core/IOS/ES/Formats.h"
 #include "Core/IOS/FS/FileIO.h"
 #include "Core/IOS/IOS.h"
-#include "Core/PatchEngine.h"
 
 #include "DiscIO/NANDContentLoader.h"
 
@@ -72,12 +73,19 @@ bool CBoot::Boot_WiiWAD(const std::string& _pFilename)
     state_file.WriteBytes(&state, sizeof(StateFlags));
   }
 
-  const DiscIO::CNANDContentLoader& ContentLoader =
-      DiscIO::CNANDContentManager::Access().GetNANDLoader(_pFilename);
+  const DiscIO::NANDContentLoader& ContentLoader =
+      DiscIO::NANDContentManager::Access().GetNANDLoader(_pFilename);
   if (!ContentLoader.IsValid())
     return false;
 
   u64 titleID = ContentLoader.GetTMD().GetTitleId();
+
+  if (!IOS::ES::IsChannel(titleID))
+  {
+    PanicAlertT("This WAD is not bootable.");
+    return false;
+  }
+
   // create data directory
   File::CreateFullPath(Common::GetTitleDataPath(titleID, Common::FROM_SESSION_ROOT));
 

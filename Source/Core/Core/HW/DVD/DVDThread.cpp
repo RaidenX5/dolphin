@@ -2,6 +2,8 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/HW/DVD/DVDThread.h"
+
 #include <cinttypes>
 #include <map>
 #include <memory>
@@ -25,7 +27,6 @@
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
 #include "Core/HW/DVD/DVDInterface.h"
-#include "Core/HW/DVD/DVDThread.h"
 #include "Core/HW/DVD/FileMonitor.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/SystemTimers.h"
@@ -86,7 +87,7 @@ static Common::FifoQueue<ReadRequest, false> s_request_queue;
 static Common::FifoQueue<ReadResult, false> s_result_queue;
 static std::map<u64, ReadResult> s_result_map;
 
-static std::unique_ptr<DiscIO::IVolume> s_disc;
+static std::unique_ptr<DiscIO::Volume> s_disc;
 
 void Start()
 {
@@ -180,7 +181,7 @@ void DoState(PointerWrap& p)
   // was made. Handling that properly may be more effort than it's worth.
 }
 
-void SetDisc(std::unique_ptr<DiscIO::IVolume> disc)
+void SetDisc(std::unique_ptr<DiscIO::Volume> disc)
 {
   WaitUntilIdle();
   s_disc = std::move(disc);

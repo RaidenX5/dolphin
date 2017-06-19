@@ -2,17 +2,19 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/PowerPC/PPCAnalyst.h"
+
 #include <algorithm>
+#include <map>
 #include <queue>
 #include <string>
+#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"
-#include "Core/PowerPC/JitCommon/JitCache.h"
-#include "Core/PowerPC/PPCAnalyst.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
 #include "Core/PowerPC/PPCTables.h"
 #include "Core/PowerPC/PowerPC.h"
@@ -728,8 +730,8 @@ u32 PPCAnalyzer::Analyze(u32 address, CodeBlock* block, CodeBuffer* buffer, u32 
     code[i].opinfo = opinfo;
     code[i].address = address;
     code[i].inst = inst;
-    code[i].branchTo = -1;
-    code[i].branchToIndex = -1;
+    code[i].branchTo = UINT32_MAX;
+    code[i].branchToIndex = UINT32_MAX;
     code[i].skip = false;
     block->m_stats->numCycles += opinfo->numCycles;
     block->m_physical_addresses.insert(result.physical_address);

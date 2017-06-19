@@ -18,6 +18,7 @@
 #include "Common/MsgHandler.h"
 
 #include "Core/Analytics.h"
+#include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -159,6 +160,7 @@ void Host_YieldToUI()
 }
 
 #if HAVE_X11
+#include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include "UICommon/X11Utils.h"
 
@@ -422,7 +424,7 @@ int main(int argc, char* argv[])
 
   DolphinAnalytics::Instance()->ReportDolphinStart("nogui");
 
-  if (!BootManager::BootCore(boot_filename, SConfig::BOOT_DEFAULT))
+  if (!BootManager::BootCore(BootParameters::GenerateFromFile(boot_filename)))
   {
     fprintf(stderr, "Could not boot %s\n", boot_filename.c_str());
     return 1;

@@ -9,6 +9,7 @@
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -24,7 +25,6 @@
 #include "Core/IOS/ES/ES.h"
 #include "Core/IOS/ES/Formats.h"
 #include "Core/IOS/IOS.h"
-#include "Core/PatchEngine.h"
 #include "Core/PowerPC/PowerPC.h"
 
 #include "DiscIO/Enums.h"
@@ -82,7 +82,7 @@ void CBoot::SetupBAT(bool is_wii)
   PowerPC::IBATUpdated();
 }
 
-bool CBoot::RunApploader(bool is_wii, const DiscIO::IVolume& volume)
+bool CBoot::RunApploader(bool is_wii, const DiscIO::Volume& volume)
 {
   const DiscIO::Partition partition = volume.GetGamePartition();
 
@@ -155,7 +155,7 @@ bool CBoot::RunApploader(bool is_wii, const DiscIO::IVolume& volume)
 // GameCube Bootstrap 2 HLE:
 // copy the apploader to 0x81200000
 // execute the apploader, function by function, using the above utility.
-bool CBoot::EmulatedBS2_GC(const DiscIO::IVolume* volume, bool skip_app_loader)
+bool CBoot::EmulatedBS2_GC(const DiscIO::Volume* volume, bool skip_app_loader)
 {
   INFO_LOG(BOOT, "Faking GC BS2...");
 
@@ -217,7 +217,7 @@ bool CBoot::EmulatedBS2_GC(const DiscIO::IVolume* volume, bool skip_app_loader)
   return RunApploader(/*is_wii*/ false, *volume);
 }
 
-bool CBoot::SetupWiiMemory(const DiscIO::IVolume* volume, u64 ios_title_id)
+bool CBoot::SetupWiiMemory(const DiscIO::Volume* volume, u64 ios_title_id)
 {
   static const std::map<DiscIO::Region, const RegionSetting> region_settings = {
       {DiscIO::Region::NTSC_J, {"JPN", "NTSC", "JP", "LJ"}},
@@ -331,7 +331,7 @@ bool CBoot::SetupWiiMemory(const DiscIO::IVolume* volume, u64 ios_title_id)
 // Wii Bootstrap 2 HLE:
 // copy the apploader to 0x81200000
 // execute the apploader
-bool CBoot::EmulatedBS2_Wii(const DiscIO::IVolume* volume)
+bool CBoot::EmulatedBS2_Wii(const DiscIO::Volume* volume)
 {
   INFO_LOG(BOOT, "Faking Wii BS2...");
   if (!volume)
@@ -342,6 +342,9 @@ bool CBoot::EmulatedBS2_Wii(const DiscIO::IVolume* volume)
 
   const DiscIO::Partition partition = volume->GetGamePartition();
   const IOS::ES::TMDReader tmd = volume->GetTMD(partition);
+
+  if (!tmd.IsValid())
+    return false;
 
   if (!SetupWiiMemory(volume, tmd.GetIOSId()))
     return false;
@@ -374,7 +377,7 @@ bool CBoot::EmulatedBS2_Wii(const DiscIO::IVolume* volume)
 // Returns true if apploader has run successfully.
 // If is_wii is true and volume is not nullptr, the disc that volume
 // point to must currently be inserted into the emulated disc drive.
-bool CBoot::EmulatedBS2(bool is_wii, const DiscIO::IVolume* volume)
+bool CBoot::EmulatedBS2(bool is_wii, const DiscIO::Volume* volume)
 {
   return is_wii ? EmulatedBS2_Wii(volume) : EmulatedBS2_GC(volume);
 }

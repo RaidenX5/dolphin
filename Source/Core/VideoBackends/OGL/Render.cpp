@@ -15,7 +15,6 @@
 
 #include "Common/Atomic.h"
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
 #include "Common/GL/GLInterfaceBase.h"
 #include "Common/GL/GLUtil.h"
 #include "Common/Logging/LogManager.h"
@@ -28,6 +27,7 @@
 
 #include "VideoBackends/OGL/BoundingBox.h"
 #include "VideoBackends/OGL/FramebufferManager.h"
+#include "VideoBackends/OGL/OGLTexture.h"
 #include "VideoBackends/OGL/PostProcessing.h"
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 #include "VideoBackends/OGL/RasterFont.h"
@@ -50,7 +50,7 @@
 
 void VideoConfig::UpdateProjectionHack()
 {
-  ::UpdateProjectionHack(g_Config.iPhackvalue, g_Config.sPhackvalue);
+  ::UpdateProjectionHack(g_Config.phack);
 }
 
 namespace OGL
@@ -63,7 +63,7 @@ static std::unique_ptr<RasterFont> s_raster_font;
 
 // 1 for no MSAA. Use s_MSAASamples > 1 to check for MSAA.
 static int s_MSAASamples = 1;
-static int s_last_multisamples = 1;
+static u32 s_last_multisamples = 1;
 static bool s_last_stereo_mode = false;
 static bool s_last_xfb_mode = false;
 
@@ -519,7 +519,7 @@ Renderer::Renderer()
       {
         // GLES 3.1 can't support stereo rendering and MSAA
         OSD::AddMessage("MSAA Stereo rendering isn't supported by your GPU.", 10000);
-        Config::SetCurrent(Config::GFX_MSAA, 1);
+        Config::SetCurrent(Config::GFX_MSAA, UINT32_C(1));
       }
     }
     else
@@ -696,7 +696,6 @@ Renderer::Renderer()
 
   // Because of the fixed framebuffer size we need to disable the resolution
   // options while running
-  g_Config.bRunning = true;
 
   // The stencil is used for bounding box emulation when SSBOs are not available
   glDisable(GL_STENCIL_TEST);
@@ -764,7 +763,6 @@ void Renderer::Shutdown()
 {
   g_framebuffer_manager.reset();
 
-  g_Config.bRunning = false;
   UpdateActiveConfig();
 
   s_raster_font.reset();
@@ -1694,7 +1692,7 @@ void Renderer::PrepareFrameDumpRenderTexture(u32 width, u32 height)
 
   m_frame_dump_render_texture_width = width;
   m_frame_dump_render_texture_height = height;
-  TextureCache::SetStage();
+  OGLTexture::SetStage();
 }
 
 void Renderer::DestroyFrameDumpResources()
@@ -1747,7 +1745,7 @@ void Renderer::RestoreAPIState()
   if (vm->m_last_vao)
     glBindVertexArray(vm->m_last_vao);
 
-  TextureCache::SetStage();
+  OGLTexture::SetStage();
 }
 
 void Renderer::SetGenerationMode()

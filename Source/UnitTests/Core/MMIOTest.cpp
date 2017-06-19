@@ -3,11 +3,14 @@
 // Refer to the license.txt file included.
 
 #include <gtest/gtest.h>
+#include <string>
 #include <unordered_set>
 
 #include "Common/CommonTypes.h"
+#include "Common/FileUtil.h"
 #include "Core/Config/Config.h"
 #include "Core/HW/MMIO.h"
+#include "UICommon/UICommon.h"
 
 // Tests that the UniqueID function returns a "unique enough" identifier
 // number: that is, it is unique in the address ranges we care about.
@@ -30,6 +33,8 @@ TEST(UniqueID, UniqueEnough)
 
 TEST(IsMMIOAddress, SpecialAddresses)
 {
+  const std::string profile_path = File::CreateTempDir();
+  UICommon::SetUserDirectory(profile_path);
   Config::Init();
   SConfig::Init();
   SConfig::GetInstance().bWii = true;
@@ -54,6 +59,7 @@ TEST(IsMMIOAddress, SpecialAddresses)
 
   SConfig::Shutdown();
   Config::Shutdown();
+  File::DeleteDirRecursively(profile_path);
 }
 
 class MappingTest : public testing::Test

@@ -4,9 +4,11 @@
 
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <mutex>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -256,9 +258,9 @@ Wiimote::Wiimote(const unsigned int index)
 
   // buttons
   groups.emplace_back(m_buttons = new ControllerEmu::Buttons(_trans("Buttons")));
-  for (auto& named_button : named_buttons)
+  for (const char* named_button : named_buttons)
   {
-    const std::string& ui_name = (named_button == "Home") ? "HOME" : named_button;
+    const std::string& ui_name = (named_button == std::string("Home")) ? "HOME" : named_button;
     m_buttons->controls.emplace_back(new ControllerEmu::Input(named_button, ui_name));
   }
 
@@ -299,7 +301,7 @@ Wiimote::Wiimote(const unsigned int index)
 
   // dpad
   groups.emplace_back(m_dpad = new ControllerEmu::Buttons(_trans("D-Pad")));
-  for (auto& named_direction : named_directions)
+  for (const char* named_direction : named_directions)
     m_dpad->controls.emplace_back(new ControllerEmu::Input(named_direction));
 
   // options

@@ -2,18 +2,22 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/IOS/USB/Bluetooth/BTReal.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
 #include <iterator>
+#include <memory>
+#include <mutex>
 #include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include <libusb.h>
 
-#include "Common/Assert.h"
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -25,7 +29,6 @@
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/Device.h"
-#include "Core/IOS/USB/Bluetooth/BTReal.h"
 #include "Core/IOS/USB/Bluetooth/hci.h"
 #include "VideoCommon/OnScreenDisplay.h"
 
@@ -517,9 +520,7 @@ void BluetoothReal::LoadLinkKeys()
   const std::string& entries = SConfig::GetInstance().m_bt_passthrough_link_keys;
   if (entries.empty())
     return;
-  std::vector<std::string> pairs;
-  SplitString(entries, ',', pairs);
-  for (const auto& pair : pairs)
+  for (const auto& pair : SplitString(entries, ','))
   {
     const auto index = pair.find('=');
     if (index == std::string::npos)
@@ -530,7 +531,7 @@ void BluetoothReal::LoadLinkKeys()
     std::reverse(address.begin(), address.end());
 
     const std::string& key_string = pair.substr(index + 1);
-    linkkey_t key;
+    linkkey_t key{};
     size_t pos = 0;
     for (size_t i = 0; i < key_string.length(); i = i + 2)
     {

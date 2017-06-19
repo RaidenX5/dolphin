@@ -20,6 +20,7 @@ namespace Vulkan
 {
 class StagingTexture2D;
 class Texture2D;
+class VKTexture;
 
 class TextureConverter
 {
@@ -30,8 +31,9 @@ public:
   bool Initialize();
 
   // Applies palette to dst_entry, using indices from src_entry.
-  void ConvertTexture(TextureCache::TCacheEntry* dst_entry, TextureCache::TCacheEntry* src_entry,
-                      VkRenderPass render_pass, const void* palette, TlutFormat palette_format);
+  void ConvertTexture(TextureCacheBase::TCacheEntry* dst_entry,
+                      TextureCache::TCacheEntry* src_entry, VkRenderPass render_pass,
+                      const void* palette, TlutFormat palette_format);
 
   // Uses an encoding shader to copy src_texture to dest_ptr.
   // NOTE: Executes the current command buffer.
@@ -45,14 +47,14 @@ public:
                                  Texture2D* src_texture, const MathUtil::Rectangle<int>& src_rect);
 
   // Decodes data from guest memory in XFB (YUYV) format to a RGBA format texture on the GPU.
-  void DecodeYUYVTextureFromMemory(TextureCache::TCacheEntry* dst_texture, const void* src_ptr,
-                                   u32 src_width, u32 src_stride, u32 src_height);
+  void DecodeYUYVTextureFromMemory(VKTexture* dst_texture, const void* src_ptr, u32 src_width,
+                                   u32 src_stride, u32 src_height);
 
   bool SupportsTextureDecoding(TextureFormat format, TlutFormat palette_format);
-  void DecodeTexture(TextureCache::TCacheEntry* entry, u32 dst_level, const u8* data,
-                     size_t data_size, TextureFormat format, u32 width, u32 height,
-                     u32 aligned_width, u32 aligned_height, u32 row_stride, const u8* palette,
-                     TlutFormat palette_format);
+  void DecodeTexture(VkCommandBuffer command_buffer, TextureCache::TCacheEntry* entry,
+                     u32 dst_level, const u8* data, size_t data_size, TextureFormat format,
+                     u32 width, u32 height, u32 aligned_width, u32 aligned_height, u32 row_stride,
+                     const u8* palette, TlutFormat palette_format);
 
 private:
   static const u32 ENCODING_TEXTURE_WIDTH = EFB_WIDTH * 4;

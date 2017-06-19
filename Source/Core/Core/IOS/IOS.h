@@ -21,7 +21,7 @@ class PointerWrap;
 
 namespace DiscIO
 {
-class CNANDContentLoader;
+class NANDContentLoader;
 }
 
 namespace IOS
@@ -82,6 +82,8 @@ enum ProcessId : u32
   PID_UNKNOWN = 19,
 };
 
+void WriteReturnValue(s32 value, u32 address);
+
 // HLE for the IOS kernel: IPC, device management, syscalls, and Dolphin-specific, IOS-wide calls.
 class Kernel
 {
@@ -111,7 +113,7 @@ public:
   void SetGidForPPC(u16 gid);
   u16 GetGidForPPC() const;
 
-  bool BootstrapPPC(const DiscIO::CNANDContentLoader& content_loader);
+  bool BootstrapPPC(const DiscIO::NANDContentLoader& content_loader);
   bool BootIOS(u64 ios_title_id);
   u32 GetVersion() const;
 

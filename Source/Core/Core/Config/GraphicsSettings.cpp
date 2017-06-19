@@ -2,10 +2,11 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/Config/GraphicsSettings.h"
+
 #include <string>
 
 #include "Core/Config/Config.h"
-#include "Core/Config/GraphicsSettings.h"
 #include "VideoCommon/VideoConfig.h"
 
 namespace Config
@@ -57,7 +58,7 @@ const ConfigInfo<bool> GFX_ENABLE_GPU_TEXTURE_DECODING{
 const ConfigInfo<bool> GFX_ENABLE_PIXEL_LIGHTING{{System::GFX, "Settings", "EnablePixelLighting"},
                                                  false};
 const ConfigInfo<bool> GFX_FAST_DEPTH_CALC{{System::GFX, "Settings", "FastDepthCalc"}, true};
-const ConfigInfo<int> GFX_MSAA{{System::GFX, "Settings", "MSAA"}, 1};
+const ConfigInfo<u32> GFX_MSAA{{System::GFX, "Settings", "MSAA"}, 1};
 const ConfigInfo<bool> GFX_SSAA{{System::GFX, "Settings", "SSAA"}, false};
 const ConfigInfo<int> GFX_EFB_SCALE{{System::GFX, "Settings", "EFBScale"},
                                     static_cast<int>(SCALE_1X)};
@@ -128,8 +129,10 @@ const ConfigInfo<bool> GFX_HACK_VERTEX_ROUDING{{System::GFX, "Hacks", "VertexRou
 const ConfigInfo<int> GFX_PROJECTION_HACK{{System::GFX, "GameSpecific", "ProjectionHack"}, 0};
 const ConfigInfo<int> GFX_PROJECTION_HACK_SZNEAR{{System::GFX, "GameSpecific", "PH_SZNear"}, 0};
 const ConfigInfo<int> GFX_PROJECTION_HACK_SZFAR{{System::GFX, "GameSpecific", "PH_SZFar"}, 0};
-const ConfigInfo<int> GFX_PROJECTION_HACK_ZNEAR{{System::GFX, "GameSpecific", "PH_ZNear"}, 0};
-const ConfigInfo<int> GFX_PROJECTION_HACK_ZFAR{{System::GFX, "GameSpecific", "PH_ZFar"}, 0};
+const ConfigInfo<std::string> GFX_PROJECTION_HACK_ZNEAR{{System::GFX, "GameSpecific", "PH_ZNear"},
+                                                        ""};
+const ConfigInfo<std::string> GFX_PROJECTION_HACK_ZFAR{{System::GFX, "GameSpecific", "PH_ZFar"},
+                                                       ""};
 const ConfigInfo<bool> GFX_PERF_QUERIES_ENABLE{{System::GFX, "GameSpecific", "PerfQueriesEnable"},
                                                false};
 }  // namespace Config

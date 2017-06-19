@@ -10,6 +10,7 @@
 #include <mutex>
 #include <queue>
 #include <utility>
+#include <variant>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,6 +21,7 @@
 #include "Common/CPUDetect.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/FileUtil.h"
 #include "Common/Flag.h"
 #include "Common/Logging/LogManager.h"
 #include "Common/MemoryUtil.h"
@@ -122,7 +124,7 @@ static void InitIsCPUKey()
 }
 #endif
 
-static void EmuThread();
+static void EmuThread(std::unique_ptr<BootParameters> boot);
 
 bool GetIsThrottlerTempDisabled()
 {
@@ -154,8 +156,8 @@ void FrameUpdateOnCPUThread()
 // Formatted stop message
 std::string StopMessage(bool main_thread, const std::string& message)
 {
-  return StringFromFormat("Stop [%s %i]\t%s\t%s", main_thread ? "Main Thread" : "Video Thread",
-                          Common::CurrentThreadId(), Common::MemUsage().c_str(), message.c_str());
+  return StringFromFormat("Stop [%s %i]\t%s", main_thread ? "Main Thread" : "Video Thread",
+                          Common::CurrentThreadId(), message.c_str());
 }
 
 void DisplayMessage(const std::string& message, int time_in_ms)
@@ -221,7 +223,7 @@ bool WantsDeterminism()
 
 // This is called from the GUI thread. See the booting call schedule in
 // BootManager.cpp
-bool Init()
+bool Init(std::unique_ptr<BootParameters> boot)
 {
   if (s_emu_thread.joinable())
   {
@@ -248,7 +250,7 @@ bool Init()
   s_window_handle = Host_GetRenderHandle();
 
   // Start the emu thread
-  s_emu_thread = std::thread(EmuThread);
+  s_emu_thread = std::thread(EmuThread, std::move(boot));
 
   return true;
 }
@@ -412,21 +414,18 @@ static void FifoPlayerThread()
   }
 
   // Enter CPU run loop. When we leave it - we are done.
-  if (FifoPlayer::GetInstance().Open(_CoreParameter.m_strFilename))
+  if (auto cpu_core = FifoPlayer::GetInstance().GetCPUCore())
   {
-    if (auto cpu_core = FifoPlayer::GetInstance().GetCPUCore())
-    {
-      PowerPC::InjectExternalCPUCore(cpu_core.get());
-      s_is_started = true;
+    PowerPC::InjectExternalCPUCore(cpu_core.get());
+    s_is_started = true;
 
-      CPUSetInitialExecutionState();
-      CPU::Run();
+    CPUSetInitialExecutionState();
+    CPU::Run();
 
-      s_is_started = false;
-      PowerPC::InjectExternalCPUCore(nullptr);
-    }
-    FifoPlayer::GetInstance().Close();
+    s_is_started = false;
+    PowerPC::InjectExternalCPUCore(nullptr);
   }
+  FifoPlayer::GetInstance().Close();
 
   // If we did not enter the CPU Run Loop above then run a fake one instead.
   // We need to be IsRunningAndStarted() for DolphinWX to stop us.
@@ -450,7 +449,7 @@ static void FifoPlayerThread()
 // Initialize and create emulation thread
 // Call browser: Init():s_emu_thread().
 // See the BootManager.cpp file description for a complete call schedule.
-static void EmuThread()
+static void EmuThread(std::unique_ptr<BootParameters> boot)
 {
   const SConfig& core_parameter = SConfig::GetInstance();
   s_is_booting.Set();
@@ -470,16 +469,10 @@ static void EmuThread()
 
   Common::SetCurrentThreadName("Emuthread - Starting");
 
-  if (SConfig::GetInstance().m_OCEnable)
-    DisplayMessage("WARNING: running at non-native CPU clock! Game may not be stable.", 8000);
-  DisplayMessage(cpu_info.brand_string, 8000);
-  DisplayMessage(cpu_info.Summarize(), 8000);
-  DisplayMessage(core_parameter.m_strFilename, 3000);
-
   // For a time this acts as the CPU thread...
   DeclareAsCPUThread();
 
-  Movie::Init();
+  Movie::Init(*boot);
   Common::ScopeGuard movie_guard{Movie::Shutdown};
 
   HW::Init();
@@ -489,6 +482,16 @@ static void EmuThread()
     INFO_LOG(CONSOLE, "%s", StopMessage(false, "Shutting down HW").c_str());
     HW::Shutdown();
     INFO_LOG(CONSOLE, "%s", StopMessage(false, "HW shutdown").c_str());
+
+    // Clear on screen messages that haven't expired
+    OSD::ClearMessages();
+
+    // The config must be restored only after the whole HW has shut down,
+    // not when it is still running.
+    BootManager::RestoreConfig();
+
+    PatchEngine::Shutdown();
+    HLE::Clear();
   }};
 
   if (!g_video_backend->Initialize(s_window_handle))
@@ -560,7 +563,15 @@ static void EmuThread()
   // Load GCM/DOL/ELF whatever ... we boot with the interpreter core
   PowerPC::SetMode(PowerPC::CoreMode::Interpreter);
 
-  CBoot::BootUp();
+  // Determine the CPU thread function
+  void (*cpuThreadFunc)();
+  if (std::holds_alternative<BootParameters::DFF>(boot->parameters))
+    cpuThreadFunc = FifoPlayerThread;
+  else
+    cpuThreadFunc = CpuThread;
+
+  if (!CBoot::BootUp(std::move(boot)))
+    return;
 
   // This adds the SyncGPU handler to CoreTiming, so now CoreTiming::Advance might block.
   Fifo::Prepare();
@@ -582,13 +593,6 @@ static void EmuThread()
   // Update the window again because all stuff is initialized
   Host_UpdateDisasmDialog();
   Host_UpdateMainFrame();
-
-  // Determine the CPU thread function
-  void (*cpuThreadFunc)(void);
-  if (core_parameter.m_BootType == SConfig::BOOT_DFF)
-    cpuThreadFunc = FifoPlayerThread;
-  else
-    cpuThreadFunc = CpuThread;
 
   // ENTER THE VIDEO THREAD LOOP
   if (core_parameter.bCPUThread)
@@ -645,13 +649,6 @@ static void EmuThread()
   if (core_parameter.bCPUThread)
     g_video_backend->Video_Cleanup();
 
-  // Clear on screen messages that haven't expired
-  OSD::ClearMessages();
-
-  BootManager::RestoreConfig();
-
-  PatchEngine::Shutdown();
-  HLE::Clear();
   // If we shut down normally, the stop message does not need to be triggered.
   stop_message_guard.Dismiss();
 }
@@ -968,7 +965,10 @@ void UpdateWantDeterminism(bool initial)
     // We need to clear the cache because some parts of the JIT depend on want_determinism, e.g. use
     // of FMA.
     JitInterface::ClearCache();
-    Core::InitializeWiiRoot(s_wants_determinism);
+
+    // Don't call InitializeWiiRoot during boot, because IOS already does it.
+    if (!initial)
+      Core::InitializeWiiRoot(s_wants_determinism);
 
     Core::PauseAndLock(false, was_unpaused);
   }

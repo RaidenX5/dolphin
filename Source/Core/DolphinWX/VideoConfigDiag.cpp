@@ -375,6 +375,8 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
                                                   wxGetTranslation(StrToWxStr(title)))),
       vconfig(g_Config)
 {
+  vconfig.Refresh();
+
   Bind(wxEVT_UPDATE_UI, &VideoConfigDiag::OnUpdateUI, this);
 
   wxNotebook* const notebook = new wxNotebook(this, wxID_ANY);
@@ -1322,11 +1324,11 @@ void VideoConfigDiag::PopulatePostProcessingShaders()
 
 void VideoConfigDiag::PopulateAAList()
 {
-  const std::vector<int>& aa_modes = vconfig.backend_info.AAModes;
+  const auto& aa_modes = vconfig.backend_info.AAModes;
   const bool supports_ssaa = vconfig.backend_info.bSupportsSSAA;
   m_msaa_modes = 0;
 
-  for (int mode : aa_modes)
+  for (auto mode : aa_modes)
   {
     if (mode == 1)
     {
@@ -1342,7 +1344,7 @@ void VideoConfigDiag::PopulateAAList()
 
   if (supports_ssaa)
   {
-    for (int mode : aa_modes)
+    for (auto mode : aa_modes)
     {
       if (mode != 1)
         choice_aamode->AppendString(std::to_string(mode) + "x SSAA");

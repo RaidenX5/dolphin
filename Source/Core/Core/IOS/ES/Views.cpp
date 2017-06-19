@@ -16,7 +16,6 @@
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/ES/Formats.h"
-#include "Core/IOS/ES/NandUtils.h"
 #include "DiscIO/NANDContentLoader.h"
 
 namespace IOS
@@ -38,7 +37,7 @@ static bool ShouldReturnFakeViewsForIOSes(u64 title_id, const TitleContext& cont
   const bool ios = IsTitleType(title_id, IOS::ES::TitleType::System) && title_id != TITLEID_SYSMENU;
   const bool disc_title = context.active && IOS::ES::IsDiscTitle(context.tmd.GetTitleId());
   return Core::WantsDeterminism() ||
-         (ios && SConfig::GetInstance().m_BootType == SConfig::BOOT_ISO && disc_title);
+         (ios && SConfig::GetInstance().m_disc_booted_from_game_list && disc_title);
 }
 
 IPCCommandResult ES::GetTicketViewCount(const IOCtlVRequest& request)
@@ -206,7 +205,7 @@ IPCCommandResult ES::GetTMDViewSize(const IOCtlVRequest& request)
 
   u64 TitleID = Memory::Read_U64(request.in_vectors[0].address);
 
-  const IOS::ES::TMDReader tmd = IOS::ES::FindInstalledTMD(TitleID);
+  const IOS::ES::TMDReader tmd = FindInstalledTMD(TitleID);
 
   if (!tmd.IsValid())
     return GetDefaultReply(FS_ENOENT);
@@ -229,7 +228,7 @@ IPCCommandResult ES::GetTMDViews(const IOCtlVRequest& request)
   }
 
   const u64 title_id = Memory::Read_U64(request.in_vectors[0].address);
-  const IOS::ES::TMDReader tmd = IOS::ES::FindInstalledTMD(title_id);
+  const IOS::ES::TMDReader tmd = FindInstalledTMD(title_id);
 
   if (!tmd.IsValid())
     return GetDefaultReply(FS_ENOENT);
@@ -377,7 +376,7 @@ IPCCommandResult ES::DIGetTMDSize(const IOCtlVRequest& request)
   if (!GetTitleContext().active)
     return GetDefaultReply(ES_EINVAL);
 
-  Memory::Write_U32(static_cast<u32>(GetTitleContext().tmd.GetRawTMD().size()),
+  Memory::Write_U32(static_cast<u32>(GetTitleContext().tmd.GetBytes().size()),
                     request.io_vectors[0].address);
   return GetDefaultReply(IPC_SUCCESS);
 }
@@ -394,7 +393,7 @@ IPCCommandResult ES::DIGetTMD(const IOCtlVRequest& request)
   if (!GetTitleContext().active)
     return GetDefaultReply(ES_EINVAL);
 
-  const std::vector<u8>& tmd_bytes = GetTitleContext().tmd.GetRawTMD();
+  const std::vector<u8>& tmd_bytes = GetTitleContext().tmd.GetBytes();
 
   if (static_cast<u32>(tmd_bytes.size()) > tmd_size)
     return GetDefaultReply(ES_EINVAL);

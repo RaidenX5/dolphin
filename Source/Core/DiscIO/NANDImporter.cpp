@@ -9,6 +9,7 @@
 #include <cstring>
 
 #include "Common/Crypto/AES.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -43,7 +44,7 @@ void NANDImporter::ImportNANDBin(const std::string& path_to_bin,
   ExtractCertificates(nand_root);
 
   // We have to clear the cache so the new NAND takes effect
-  DiscIO::CNANDContentManager::Access().ClearCache();
+  DiscIO::NANDContentManager::Access().ClearCache();
 }
 
 bool NANDImporter::ReadNANDBin(const std::string& path_to_bin)

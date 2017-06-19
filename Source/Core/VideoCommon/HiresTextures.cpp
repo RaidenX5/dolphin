@@ -17,6 +17,7 @@
 #include <vector>
 #include <xxhash.h>
 
+#include "Common/File.h"
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
 #include "Common/Flag.h"
@@ -532,7 +533,7 @@ bool HiresTexture::LoadTexture(Level& level, const std::vector<u8>& buffer)
   // Images loaded by SOIL are converted to RGBA.
   level.width = static_cast<u32>(width);
   level.height = static_cast<u32>(height);
-  level.format = HostTextureFormat::RGBA8;
+  level.format = AbstractTextureFormat::RGBA8;
   level.data = ImageDataPointer(data, SOIL_free_image_data);
   level.row_length = level.width;
   level.data_size = static_cast<size_t>(level.row_length) * 4 * level.height;
@@ -554,7 +555,7 @@ HiresTexture::~HiresTexture()
 {
 }
 
-HostTextureFormat HiresTexture::GetFormat() const
+AbstractTextureFormat HiresTexture::GetFormat() const
 {
   return m_levels.at(0).format;
 }

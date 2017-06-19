@@ -5,6 +5,8 @@
 #include "DolphinWX/ISOProperties/FilesystemPanel.h"
 
 #include <array>
+#include <functional>
+#include <memory>
 #include <vector>
 
 #include <wx/bitmap.h>
@@ -32,18 +34,17 @@ namespace
 class WiiPartition final : public wxTreeItemData
 {
 public:
-  WiiPartition(std::unique_ptr<DiscIO::IFileSystem> filesystem_)
-      : filesystem{std::move(filesystem_)}
+  WiiPartition(std::unique_ptr<DiscIO::FileSystem> filesystem_) : filesystem{std::move(filesystem_)}
   {
   }
 
-  std::unique_ptr<DiscIO::IFileSystem> filesystem;
+  std::unique_ptr<DiscIO::FileSystem> filesystem;
 };
 
 class IntegrityCheckThread final : public wxThread
 {
 public:
-  explicit IntegrityCheckThread(const DiscIO::IVolume* volume, DiscIO::Partition partition)
+  explicit IntegrityCheckThread(const DiscIO::Volume* volume, DiscIO::Partition partition)
       : wxThread{wxTHREAD_JOINABLE}, m_volume{volume}, m_partition{partition}
   {
     Create();
@@ -55,7 +56,7 @@ public:
   }
 
 private:
-  const DiscIO::IVolume* const m_volume;
+  const DiscIO::Volume* const m_volume;
   const DiscIO::Partition m_partition;
 };
 
@@ -84,55 +85,22 @@ wxImageList* LoadIconBitmaps(const wxWindow* context)
   return icon_list;
 }
 
-size_t CreateDirectoryTree(wxTreeCtrl* tree_ctrl, wxTreeItemId parent,
-                           const std::vector<DiscIO::SFileInfo>& file_infos,
-                           const size_t first_index, const size_t last_index)
+void CreateDirectoryTree(wxTreeCtrl* tree_ctrl, wxTreeItemId parent,
+                         const DiscIO::FileInfo& directory)
 {
-  size_t current_index = first_index;
-
-  while (current_index < last_index)
+  for (const DiscIO::FileInfo& file_info : directory)
   {
-    const DiscIO::SFileInfo& file_info = file_infos[current_index];
-    std::string file_path = file_info.m_FullPath;
-
-    // Trim the trailing '/' if it exists.
-    if (file_path.back() == DIR_SEP_CHR)
-    {
-      file_path.pop_back();
-    }
-
-    // Cut off the path up to the actual filename or folder.
-    // Say we have "/music/stream/stream1.strm", the result will be "stream1.strm".
-    const size_t dir_sep_index = file_path.rfind(DIR_SEP_CHR);
-    if (dir_sep_index != std::string::npos)
-    {
-      file_path = file_path.substr(dir_sep_index + 1);
-    }
-
-    // check next index
+    const wxString name = StrToWxStr(file_info.GetName());
     if (file_info.IsDirectory())
     {
-      const wxTreeItemId item = tree_ctrl->AppendItem(parent, StrToWxStr(file_path), ICON_FOLDER);
-      current_index = CreateDirectoryTree(tree_ctrl, item, file_infos, current_index + 1,
-                                          static_cast<size_t>(file_info.m_FileSize));
+      wxTreeItemId item = tree_ctrl->AppendItem(parent, name, ICON_FOLDER);
+      CreateDirectoryTree(tree_ctrl, item, file_info);
     }
     else
     {
-      tree_ctrl->AppendItem(parent, StrToWxStr(file_path), ICON_FILE);
-      current_index++;
+      tree_ctrl->AppendItem(parent, name, ICON_FILE);
     }
   }
-
-  return current_index;
-}
-
-size_t CreateDirectoryTree(wxTreeCtrl* tree_ctrl, wxTreeItemId parent,
-                           const std::vector<DiscIO::SFileInfo>& file_infos)
-{
-  if (file_infos.empty())
-    return 0;
-
-  return CreateDirectoryTree(tree_ctrl, parent, file_infos, 1, file_infos.at(0).m_FileSize);
 }
 
 WiiPartition* FindWiiPartition(wxTreeCtrl* tree_ctrl, const wxString& label)
@@ -155,7 +123,7 @@ WiiPartition* FindWiiPartition(wxTreeCtrl* tree_ctrl, const wxString& label)
 }  // Anonymous namespace
 
 FilesystemPanel::FilesystemPanel(wxWindow* parent, wxWindowID id,
-                                 const std::unique_ptr<DiscIO::IVolume>& opened_iso)
+                                 const std::unique_ptr<DiscIO::Volume>& opened_iso)
     : wxPanel{parent, id}, m_opened_iso{opened_iso}
 {
   CreateGUI();
@@ -204,7 +172,7 @@ bool FilesystemPanel::PopulateFileSystemTree()
   {
     for (size_t i = 0; i < partitions.size(); ++i)
     {
-      std::unique_ptr<DiscIO::IFileSystem> file_system(
+      std::unique_ptr<DiscIO::FileSystem> file_system(
           DiscIO::CreateFileSystem(m_opened_iso.get(), partitions[i]));
       if (file_system)
       {
@@ -214,9 +182,9 @@ bool FilesystemPanel::PopulateFileSystemTree()
         WiiPartition* const partition = new WiiPartition(std::move(file_system));
 
         m_tree_ctrl->SetItemData(partition_root, partition);
-        CreateDirectoryTree(m_tree_ctrl, partition_root, partition->filesystem->GetFileList());
+        CreateDirectoryTree(m_tree_ctrl, partition_root, partition->filesystem->GetRoot());
 
-        if (i == 1)
+        if (partitions[i] == m_opened_iso->GetGamePartition())
           m_tree_ctrl->Expand(partition_root);
       }
     }
@@ -227,7 +195,7 @@ bool FilesystemPanel::PopulateFileSystemTree()
     if (!m_filesystem)
       return false;
 
-    CreateDirectoryTree(m_tree_ctrl, m_tree_ctrl->GetRootItem(), m_filesystem->GetFileList());
+    CreateDirectoryTree(m_tree_ctrl, m_tree_ctrl->GetRootItem(), m_filesystem->GetRoot());
   }
 
   return true;
@@ -310,7 +278,7 @@ void FilesystemPanel::OnExtractDirectories(wxCommandEvent& event)
 
 void FilesystemPanel::OnExtractHeaderData(wxCommandEvent& event)
 {
-  DiscIO::IFileSystem* file_system = nullptr;
+  DiscIO::FileSystem* file_system = nullptr;
   const wxString path = wxDirSelector(_("Choose the folder to extract to"));
 
   if (path.empty())
@@ -395,13 +363,13 @@ void FilesystemPanel::ExtractAllFiles(const wxString& output_folder)
     while (item.IsOk())
     {
       const auto* const partition = static_cast<WiiPartition*>(m_tree_ctrl->GetItemData(item));
-      ExtractDirectories("", WxStrToStr(output_folder), partition->filesystem.get());
+      ExtractDirectories("", WxStrToStr(output_folder), *partition->filesystem);
       item = m_tree_ctrl->GetNextChild(root, cookie);
     }
   }
   else
   {
-    ExtractDirectories("", WxStrToStr(output_folder), m_filesystem.get());
+    ExtractDirectories("", WxStrToStr(output_folder), *m_filesystem);
   }
 }
 
@@ -418,12 +386,14 @@ void FilesystemPanel::ExtractSingleFile(const wxString& output_file_path) const
     // Remove "Partition x/"
     selection_file_path.erase(0, slash_index + 1);
 
-    partition->filesystem->ExportFile(WxStrToStr(selection_file_path),
-                                      WxStrToStr(output_file_path));
+    partition->filesystem->ExportFile(
+        partition->filesystem->FindFileInfo(WxStrToStr(selection_file_path)).get(),
+        WxStrToStr(output_file_path));
   }
   else
   {
-    m_filesystem->ExportFile(WxStrToStr(selection_file_path), WxStrToStr(output_file_path));
+    m_filesystem->ExportFile(m_filesystem->FindFileInfo(WxStrToStr(selection_file_path)).get(),
+                             WxStrToStr(output_file_path));
   }
 }
 
@@ -441,100 +411,71 @@ void FilesystemPanel::ExtractSingleDirectory(const wxString& output_folder)
     directory_path.erase(0, slash_index + 1);
 
     ExtractDirectories(WxStrToStr(directory_path), WxStrToStr(output_folder),
-                       partition->filesystem.get());
+                       *partition->filesystem);
   }
   else
   {
-    ExtractDirectories(WxStrToStr(directory_path), WxStrToStr(output_folder), m_filesystem.get());
+    ExtractDirectories(WxStrToStr(directory_path), WxStrToStr(output_folder), *m_filesystem);
+  }
+}
+
+void ExtractDir(const std::string& full_path, const std::string& output_folder,
+                const DiscIO::FileSystem& file_system, const DiscIO::FileInfo& directory,
+                const std::function<bool(const std::string& path)>& update_progress)
+{
+  for (const DiscIO::FileInfo& file_info : directory)
+  {
+    const std::string path = full_path + file_info.GetName() + (file_info.IsDirectory() ? "/" : "");
+    const std::string output_path = output_folder + DIR_SEP_CHR + path;
+
+    if (update_progress(path))
+      return;
+
+    DEBUG_LOG(DISCIO, "%s", output_path.c_str());
+
+    if (file_info.IsDirectory())
+    {
+      File::CreateFullPath(output_path);
+      ExtractDir(path, output_folder, file_system, file_info, update_progress);
+    }
+    else
+    {
+      if (File::Exists(output_path))
+        NOTICE_LOG(DISCIO, "%s already exists", output_path.c_str());
+      else if (!file_system.ExportFile(&file_info, output_path))
+        ERROR_LOG(DISCIO, "Could not export %s", output_path.c_str());
+    }
   }
 }
 
 void FilesystemPanel::ExtractDirectories(const std::string& full_path,
                                          const std::string& output_folder,
-                                         DiscIO::IFileSystem* filesystem)
+                                         const DiscIO::FileSystem& filesystem)
 {
-  const std::vector<DiscIO::SFileInfo>& fst = filesystem->GetFileList();
-
-  u32 index = 0;
-  u32 size = 0;
-
-  // Extract all
-  if (full_path.empty())
+  if (full_path.empty())  // Root
   {
-    size = static_cast<u32>(fst.size());
-
-    filesystem->ExportApploader(output_folder);
-    filesystem->ExportDOL(output_folder);
-  }
-  else
-  {
-    // Look for the dir we are going to extract
-    for (index = 0; index < fst.size(); ++index)
-    {
-      if (fst[index].m_FullPath == full_path)
-      {
-        INFO_LOG(DISCIO, "Found the directory at %u", index);
-        size = static_cast<u32>(fst[index].m_FileSize);
-        break;
-      }
-    }
-
-    INFO_LOG(DISCIO, "Directory found from %u to %u\nextracting to: %s", index, size,
-             output_folder.c_str());
+    filesystem.ExportApploader(output_folder);
+    filesystem.ExportDOL(output_folder);
   }
 
-  const auto dialog_title = (index != 0) ? _("Extracting Directory") : _("Extracting All Files");
-  wxProgressDialog dialog(dialog_title, _("Extracting..."), static_cast<int>(size - 1), this,
+  std::unique_ptr<DiscIO::FileInfo> file_info = filesystem.FindFileInfo(full_path);
+  u32 size = file_info->GetTotalChildren();
+  u32 progress = 0;
+
+  wxString dialog_title = full_path.empty() ? _("Extracting All Files") : _("Extracting Directory");
+  wxProgressDialog dialog(dialog_title, _("Extracting..."), size, this,
                           wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME |
                               wxPD_ESTIMATED_TIME | wxPD_REMAINING_TIME | wxPD_SMOOTH);
 
-  // Extraction
-  for (u32 i = index; i < size; i++)
-  {
+  File::CreateFullPath(output_folder + "/" + full_path);
+  ExtractDir(full_path, output_folder, filesystem, *file_info, [&](const std::string& path) {
     dialog.SetTitle(wxString::Format(
-        "%s : %u%%", dialog_title.c_str(),
-        static_cast<u32>((static_cast<float>(i - index) / static_cast<float>(size - index)) *
-                         100)));
-
-    dialog.Update(i, wxString::Format(_("Extracting %s"), StrToWxStr(fst[i].m_FullPath)));
-
-    if (dialog.WasCancelled())
-      break;
-
-    if (fst[i].IsDirectory())
-    {
-      const std::string export_name =
-          StringFromFormat("%s/%s/", output_folder.c_str(), fst[i].m_FullPath.c_str());
-      INFO_LOG(DISCIO, "%s", export_name.c_str());
-
-      if (!File::Exists(export_name) && !File::CreateFullPath(export_name))
-      {
-        ERROR_LOG(DISCIO, "Could not create the path %s", export_name.c_str());
-      }
-      else
-      {
-        if (!File::IsDirectory(export_name))
-          ERROR_LOG(DISCIO, "%s already exists and is not a directory", export_name.c_str());
-
-        ERROR_LOG(DISCIO, "Folder %s already exists", export_name.c_str());
-      }
-    }
-    else
-    {
-      const std::string export_name =
-          StringFromFormat("%s/%s", output_folder.c_str(), fst[i].m_FullPath.c_str());
-      INFO_LOG(DISCIO, "%s", export_name.c_str());
-
-      if (!File::Exists(export_name) && !filesystem->ExportFile(fst[i].m_FullPath, export_name))
-      {
-        ERROR_LOG(DISCIO, "Could not export %s", export_name.c_str());
-      }
-      else
-      {
-        ERROR_LOG(DISCIO, "%s already exists", export_name.c_str());
-      }
-    }
-  }
+        "%s : %d%%", dialog_title.c_str(),
+        static_cast<u32>((static_cast<float>(progress) / static_cast<float>(size)) * 100)));
+    dialog.Update(progress, wxString::Format(_("Extracting %s"), StrToWxStr(path)));
+    ++progress;
+    return dialog.WasCancelled();
+  });
 }
 
 wxString FilesystemPanel::BuildFilePathFromSelection() const

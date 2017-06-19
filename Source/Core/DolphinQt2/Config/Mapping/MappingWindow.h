@@ -41,7 +41,9 @@ public:
     MAPPING_GC_STEERINGWHEEL,
     // Wii
     MAPPING_WIIMOTE_EMU,
-    MAPPING_WIIMOTE_HYBRID
+    MAPPING_WIIMOTE_HYBRID,
+    // Hotkeys
+    MAPPING_HOTKEYS
   };
 
   explicit MappingWindow(QWidget* parent, int port_num);
@@ -52,6 +54,7 @@ public:
   std::shared_ptr<ciface::Core::Device> GetDevice() const;
 
   void SetBlockInputs(const bool block);
+  ControllerEmu::EmulatedController* GetController() const;
 signals:
   void Update();
   void ClearFields();
@@ -94,7 +97,7 @@ private:
 
   // Profiles
   QGroupBox* m_profiles_box;
-  QVBoxLayout* m_profiles_layout;
+  QHBoxLayout* m_profiles_layout;
   QComboBox* m_profiles_combo;
   QPushButton* m_profiles_load;
   QPushButton* m_profiles_save;
@@ -102,7 +105,7 @@ private:
 
   // Reset
   QGroupBox* m_reset_box;
-  QVBoxLayout* m_reset_layout;
+  QHBoxLayout* m_reset_layout;
   QPushButton* m_reset_default;
   QPushButton* m_reset_clear;
 

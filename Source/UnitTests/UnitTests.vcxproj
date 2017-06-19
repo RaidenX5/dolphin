@@ -48,8 +48,6 @@
       <AdditionalLibraryDirectories>$(ExternalsDir)OpenAL\lib;$(ExternalsDir)ffmpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>avrt.lib;iphlpapi.lib;winmm.lib;setupapi.lib;opengl32.lib;glu32.lib;rpcrt4.lib;comctl32.lib;avcodec.lib;avformat.lib;avutil.lib;swresample.lib;swscale.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
-      <!--TODO fix up ffmpeg garbage-->
-      <AdditionalOptions>/NODEFAULTLIB:libcmt %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -82,6 +80,9 @@
     </ProjectReference>
     <ProjectReference Include="$(CoreDir)VideoBackends\Vulkan\Vulkan.vcxproj">
       <Project>{29F29A19-F141-45AD-9679-5A2923B49DA3}</Project>
+    </ProjectReference>
+    <ProjectReference Include="$(CoreDir)UICommon\UICommon.vcxproj">
+      <Project>{604c8368-f34a-4d55-82c8-cc92a0c13254}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

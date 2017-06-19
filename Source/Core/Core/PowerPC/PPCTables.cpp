@@ -13,12 +13,12 @@
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 
 #include "Core/PowerPC/Interpreter/Interpreter.h"
-#include "Core/PowerPC/JitInterface.h"
 #include "Core/PowerPC/PowerPC.h"
 
 std::array<GekkoOPInfo*, 64> m_infoTable;

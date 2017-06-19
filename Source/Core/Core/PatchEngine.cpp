@@ -6,6 +6,8 @@
 // Supports simple memory patches, and has a partial Action Replay implementation
 // in ActionReplay.cpp/h.
 
+#include "Core/PatchEngine.h"
+
 #include <algorithm>
 #include <map>
 #include <set>
@@ -13,7 +15,6 @@
 #include <vector>
 
 #include "Common/Assert.h"
-#include "Common/FileUtil.h"
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
 
@@ -21,7 +22,6 @@
 #include "Core/ConfigManager.h"
 #include "Core/GeckoCode.h"
 #include "Core/GeckoCodeConfig.h"
-#include "Core/PatchEngine.h"
 #include "Core/PowerPC/PowerPC.h"
 
 namespace PatchEngine
@@ -86,8 +86,7 @@ void LoadPatchSection(const std::string& section, std::vector<Patch>& patches, I
           line[loc] = ':';
         }
 
-        std::vector<std::string> items;
-        SplitString(line, ':', items);
+        const std::vector<std::string> items = SplitString(line, ':');
 
         if (items.size() >= 3)
         {

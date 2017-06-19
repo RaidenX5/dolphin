@@ -50,6 +50,15 @@ enum StereoMode
   STEREO_3DVISION
 };
 
+struct ProjectionHackConfig final
+{
+  bool m_enable;
+  bool m_sznear;
+  bool m_szfar;
+  std::string m_znear;
+  std::string m_zfar;
+};
+
 // NEVER inherit from this class.
 struct VideoConfig final
 {
@@ -61,7 +70,6 @@ struct VideoConfig final
 
   // General
   bool bVSync;
-  bool bRunning;
   bool bWidescreenHack;
   int iAspectRatio;
   bool bCrop;  // Aspect ratio controls.
@@ -70,7 +78,7 @@ struct VideoConfig final
   bool bShaderCache;
 
   // Enhancements
-  int iMultisamples;
+  u32 iMultisamples;
   bool bSSAA;
   int iEFBScale;
   bool bForceFiltering;
@@ -120,8 +128,7 @@ struct VideoConfig final
   bool bSkipEFBCopyToRam;
   bool bCopyEFBScaled;
   int iSafeTextureCache_ColorSamples;
-  int iPhackvalue[3];
-  std::string sPhackvalue[2];
+  ProjectionHackConfig phack;
   float fAspectRatioHackW, fAspectRatioHackH;
   bool bEnablePixelLighting;
   bool bFastDepthCalc;
@@ -167,7 +174,7 @@ struct VideoConfig final
     APIType api_type;
 
     std::vector<std::string> Adapters;  // for D3D
-    std::vector<int> AAModes;
+    std::vector<u32> AAModes;
 
     // TODO: merge AdapterName and Adapters array
     std::string AdapterName;  // for OpenGL

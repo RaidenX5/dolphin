@@ -2,9 +2,13 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/ConfigLoaders/GameConfigLoader.h"
+
 #include <algorithm>
 #include <array>
+#include <list>
 #include <map>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -20,7 +24,6 @@
 
 #include "Core/Config/Config.h"
 #include "Core/Config/GraphicsSettings.h"
-#include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/ConfigLoaders/IsSettingSaveable.h"
 
 namespace ConfigLoaders

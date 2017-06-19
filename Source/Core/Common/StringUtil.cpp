@@ -341,15 +341,16 @@ void BuildCompleteFilename(std::string& _CompleteFilename, const std::string& _P
   _CompleteFilename += _Filename;
 }
 
-void SplitString(const std::string& str, const char delim, std::vector<std::string>& output)
+std::vector<std::string> SplitString(const std::string& str, const char delim)
 {
   std::istringstream iss(str);
-  output.resize(1);
+  std::vector<std::string> output(1);
 
   while (std::getline(iss, *output.rbegin(), delim))
     output.push_back("");
 
   output.pop_back();
+  return output;
 }
 
 std::string JoinStrings(const std::vector<std::string>& strings, const std::string& delimiter)
@@ -403,6 +404,12 @@ bool StringBeginsWith(const std::string& str, const std::string& begin)
 bool StringEndsWith(const std::string& str, const std::string& end)
 {
   return str.size() >= end.size() && std::equal(end.rbegin(), end.rend(), str.rbegin());
+}
+
+void StringPopBackIf(std::string* s, char c)
+{
+  if (!s->empty() && s->back() == c)
+    s->pop_back();
 }
 
 #ifdef _WIN32

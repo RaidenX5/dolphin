@@ -3,15 +3,9 @@
 // Refer to the license.txt file included.
 
 #include <algorithm>
-#include <cmath>
 
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
-#include "Common/IniFile.h"
-#include "Common/MsgHandler.h"
-#include "Common/StringUtil.h"
 #include "Core/Config/GraphicsSettings.h"
-#include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/Movie.h"
 #include "VideoCommon/OnScreenDisplay.h"
@@ -31,8 +25,6 @@ void UpdateActiveConfig()
 
 VideoConfig::VideoConfig()
 {
-  bRunning = false;
-
   // Needed for the first frame, I think
   fAspectRatioHackW = 1;
   fAspectRatioHackH = 1;
@@ -132,11 +124,11 @@ void VideoConfig::Refresh()
   bEFBEmulateFormatChanges = Config::Get(Config::GFX_HACK_EFB_EMULATE_FORMAT_CHANGES);
   bVertexRounding = Config::Get(Config::GFX_HACK_VERTEX_ROUDING);
 
-  iPhackvalue[0] = Config::Get(Config::GFX_PROJECTION_HACK);
-  iPhackvalue[1] = Config::Get(Config::GFX_PROJECTION_HACK_SZNEAR);
-  iPhackvalue[2] = Config::Get(Config::GFX_PROJECTION_HACK_SZFAR);
-  sPhackvalue[0] = Config::Get(Config::GFX_PROJECTION_HACK_ZNEAR);
-  sPhackvalue[1] = Config::Get(Config::GFX_PROJECTION_HACK_ZFAR);
+  phack.m_enable = Config::Get(Config::GFX_PROJECTION_HACK) == 1;
+  phack.m_sznear = Config::Get(Config::GFX_PROJECTION_HACK_SZNEAR) == 1;
+  phack.m_szfar = Config::Get(Config::GFX_PROJECTION_HACK_SZFAR) == 1;
+  phack.m_znear = Config::Get(Config::GFX_PROJECTION_HACK_ZNEAR);
+  phack.m_zfar = Config::Get(Config::GFX_PROJECTION_HACK_ZFAR);
   bPerfQueriesEnable = Config::Get(Config::GFX_PERF_QUERIES_ENABLE);
 
   if (iEFBScale == SCALE_FORCE_INTEGRAL)
@@ -158,14 +150,6 @@ void VideoConfig::Refresh()
       break;
     }
   }
-
-  // Load common settings
-  IniFile iniFile;
-  iniFile.Load(File::GetUserPath(F_DOLPHINCONFIG_IDX));
-  IniFile::Section* interface = iniFile.GetOrCreateSection("Interface");
-  bool bTmp;
-  interface->Get("UsePanicHandlers", &bTmp, true);
-  SetEnableAlert(bTmp);
 
   VerifyValidity();
 }

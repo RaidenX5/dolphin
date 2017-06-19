@@ -2,13 +2,15 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/IOS/USB/USBV5.h"
+
+#include <cstddef>
 #include <numeric>
 #include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/Device.h"
-#include "Core/IOS/USB/USBV5.h"
 
 namespace IOS
 {

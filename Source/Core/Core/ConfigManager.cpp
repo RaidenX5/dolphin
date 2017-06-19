@@ -2,10 +2,14 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
+#include "Core/ConfigManager.h"
+
 #include <cinttypes>
 #include <climits>
 #include <memory>
 #include <optional>
+#include <sstream>
+#include <variant>
 
 #include "AudioCommon/AudioCommon.h"
 
@@ -22,9 +26,6 @@
 
 #include "Core/Analytics.h"
 #include "Core/Boot/Boot.h"
-#include "Core/Boot/Boot_DOL.h"
-#include "Core/Config/Config.h"
-#include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/FifoPlayer/FifoDataFile.h"
 #include "Core/HLE/HLE.h"
@@ -233,7 +234,7 @@ void SConfig::SaveCoreSettings(IniFile& ini)
 {
   IniFile::Section* core = ini.GetOrCreateSection("Core");
 
-  core->Set("HLE_BS2", bHLE_BS2);
+  core->Set("SkipIPL", bHLE_BS2);
   core->Set("TimingVariance", iTimingVariance);
   core->Set("CPUCore", iCPUCore);
   core->Set("Fastmem", bFastmem);
@@ -285,6 +286,7 @@ void SConfig::SaveCoreSettings(IniFile& ini)
   core->Set("PerfMapDir", m_perfDir);
   core->Set("EnableCustomRTC", bEnableCustomRTC);
   core->Set("CustomRTCValue", m_customRTCValue);
+  core->Set("EnableSignatureChecks", m_enable_signature_checks);
 }
 
 void SConfig::SaveMovieSettings(IniFile& ini)
@@ -374,21 +376,25 @@ void SConfig::SaveSettingsToSysconf()
 {
   SysConf sysconf{Common::FromWhichRoot::FROM_CONFIGURED_ROOT};
 
-  sysconf.SetData<u8>("IPL.SSV", m_wii_screensaver);
-  sysconf.SetData<u8>("IPL.LNG", m_wii_language);
+  sysconf.SetData<u8>("IPL.SSV", SysConf::Entry::Type::Byte, m_wii_screensaver);
+  sysconf.SetData<u8>("IPL.LNG", SysConf::Entry::Type::Byte, m_wii_language);
 
-  sysconf.SetData<u8>("IPL.AR", m_wii_aspect_ratio);
-  sysconf.SetData<u8>("BT.BAR", m_sensor_bar_position);
-  sysconf.SetData<u32>("BT.SENS", m_sensor_bar_sensitivity);
-  sysconf.SetData<u8>("BT.SPKV", m_speaker_volume);
-  sysconf.SetData("BT.MOT", m_wiimote_motor);
-  sysconf.SetData("IPL.PGS", bProgressive);
-  sysconf.SetData("IPL.E60", bPAL60);
+  sysconf.SetData<u8>("IPL.AR", SysConf::Entry::Type::Byte, m_wii_aspect_ratio);
+  sysconf.SetData<u8>("BT.BAR", SysConf::Entry::Type::Byte, m_sensor_bar_position);
+  sysconf.SetData<u32>("BT.SENS", SysConf::Entry::Type::Long, m_sensor_bar_sensitivity);
+  sysconf.SetData<u8>("BT.SPKV", SysConf::Entry::Type::Byte, m_speaker_volume);
+  sysconf.SetData<u8>("BT.MOT", SysConf::Entry::Type::Byte, m_wiimote_motor);
+  sysconf.SetData<u8>("IPL.PGS", SysConf::Entry::Type::Byte, bProgressive);
+  sysconf.SetData<u8>("IPL.E60", SysConf::Entry::Type::Byte, bPAL60);
 
   // Disable WiiConnect24's standby mode. If it is enabled, it prevents us from receiving
   // shutdown commands in the State Transition Manager (STM).
   // TODO: remove this if and once Dolphin supports WC24 standby mode.
-  sysconf.SetData<u8>("IPL.IDL", 0x00);
+  SysConf::Entry* idle_entry = sysconf.GetOrAddEntry("IPL.IDL", SysConf::Entry::Type::SmallArray);
+  if (idle_entry->bytes.empty())
+    idle_entry->bytes = std::vector<u8>(2);
+  else
+    idle_entry->bytes[0] = 0;
   NOTICE_LOG(COMMON, "Disabling WC24 'standby' (shutdown to idle) to avoid hanging on shutdown");
 
   IOS::HLE::RestoreBTInfoSection(&sysconf);
@@ -542,7 +548,7 @@ void SConfig::LoadCoreSettings(IniFile& ini)
 {
   IniFile::Section* core = ini.GetOrCreateSection("Core");
 
-  core->Get("HLE_BS2", &bHLE_BS2, false);
+  core->Get("SkipIPL", &bHLE_BS2, true);
 #ifdef _M_X86
   core->Get("CPUCore", &iCPUCore, PowerPC::CORE_JIT64);
 #elif _M_ARM_64
@@ -569,7 +575,7 @@ void SConfig::LoadCoreSettings(IniFile& ini)
   core->Get("MemcardBPath", &m_strMemoryCardB);
   core->Get("AgpCartAPath", &m_strGbaCartA);
   core->Get("AgpCartBPath", &m_strGbaCartB);
-  core->Get("SlotA", (int*)&m_EXIDevice[0], ExpansionInterface::EXIDEVICE_MEMORYCARD);
+  core->Get("SlotA", (int*)&m_EXIDevice[0], ExpansionInterface::EXIDEVICE_MEMORYCARDFOLDER);
   core->Get("SlotB", (int*)&m_EXIDevice[1], ExpansionInterface::EXIDEVICE_NONE);
   core->Get("SerialPort1", (int*)&m_EXIDevice[2], ExpansionInterface::EXIDEVICE_NONE);
   core->Get("BBA_MAC", &m_bba_mac);
@@ -607,6 +613,7 @@ void SConfig::LoadCoreSettings(IniFile& ini)
   core->Get("EnableCustomRTC", &bEnableCustomRTC, false);
   // Default to seconds between 1.1.1970 and 1.1.2000
   core->Get("CustomRTCValue", &m_customRTCValue, 946684800);
+  core->Get("EnableSignatureChecks", &m_enable_signature_checks, true);
 }
 
 void SConfig::LoadMovieSettings(IniFile& ini)
@@ -685,10 +692,8 @@ void SConfig::LoadUSBPassthroughSettings(IniFile& ini)
   IniFile::Section* section = ini.GetOrCreateSection("USBPassthrough");
   m_usb_passthrough_devices.clear();
   std::string devices_string;
-  std::vector<std::string> pairs;
   section->Get("Devices", &devices_string, "");
-  SplitString(devices_string, ',', pairs);
-  for (const auto& pair : pairs)
+  for (const auto& pair : SplitString(devices_string, ','))
   {
     const auto index = pair.find(':');
     if (index == std::string::npos)
@@ -705,15 +710,15 @@ void SConfig::LoadSettingsFromSysconf()
 {
   SysConf sysconf{Common::FromWhichRoot::FROM_CONFIGURED_ROOT};
 
-  m_wii_screensaver = sysconf.GetData<u8>("IPL.SSV");
-  m_wii_language = sysconf.GetData<u8>("IPL.LNG");
-  m_wii_aspect_ratio = sysconf.GetData<u8>("IPL.AR");
-  m_sensor_bar_position = sysconf.GetData<u8>("BT.BAR");
-  m_sensor_bar_sensitivity = sysconf.GetData<u32>("BT.SENS");
-  m_speaker_volume = sysconf.GetData<u8>("BT.SPKV");
-  m_wiimote_motor = sysconf.GetData<u8>("BT.MOT") != 0;
-  bProgressive = sysconf.GetData<u8>("IPL.PGS") != 0;
-  bPAL60 = sysconf.GetData<u8>("IPL.E60") != 0;
+  m_wii_screensaver = sysconf.GetData<u8>("IPL.SSV", m_wii_screensaver);
+  m_wii_language = sysconf.GetData<u8>("IPL.LNG", m_wii_language);
+  m_wii_aspect_ratio = sysconf.GetData<u8>("IPL.AR", m_wii_aspect_ratio);
+  m_sensor_bar_position = sysconf.GetData<u8>("BT.BAR", m_sensor_bar_position);
+  m_sensor_bar_sensitivity = sysconf.GetData<u32>("BT.SENS", m_sensor_bar_sensitivity);
+  m_speaker_volume = sysconf.GetData<u8>("BT.SPKV", m_speaker_volume);
+  m_wiimote_motor = sysconf.GetData<u8>("BT.MOT", m_wiimote_motor) != 0;
+  bProgressive = sysconf.GetData<u8>("IPL.PGS", bProgressive) != 0;
+  bPAL60 = sysconf.GetData<u8>("IPL.E60", bPAL60) != 0;
 }
 
 void SConfig::ResetRunningGameMetadata()
@@ -721,7 +726,7 @@ void SConfig::ResetRunningGameMetadata()
   SetRunningGameMetadata("00000000", 0, 0, Core::TitleDatabase::TitleType::Other);
 }
 
-void SConfig::SetRunningGameMetadata(const DiscIO::IVolume& volume,
+void SConfig::SetRunningGameMetadata(const DiscIO::Volume& volume,
                                      const DiscIO::Partition& partition)
 {
   SetRunningGameMetadata(volume.GetGameID(partition), volume.GetTitleID(partition).value_or(0),
@@ -752,6 +757,20 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, u64 title_id, u
   m_game_id = game_id;
   m_title_id = title_id;
   m_revision = revision;
+
+  if (game_id.length() == 6)
+  {
+    m_debugger_game_id = game_id;
+  }
+  else if (title_id != 0)
+  {
+    m_debugger_game_id =
+        StringFromFormat("%08X_%08X", static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
+  }
+  else
+  {
+    m_debugger_game_id.clear();
+  }
 
   if (!was_changed)
     return;
@@ -881,165 +900,98 @@ std::string SConfig::GetBootROMPath(const std::string& region_directory) const
   return path;
 }
 
-// Sets m_region to the region parameter, or to PAL if the region parameter
-// is invalid. Set directory_name to the value returned by GetDirectoryForRegion
-// for m_region. Returns false if the region parameter is invalid.
-bool SConfig::SetRegion(DiscIO::Region region, std::string* directory_name)
+struct SetGameMetadata
 {
+  SetGameMetadata(SConfig* config_, DiscIO::Region* region_) : config(config_), region(region_) {}
+  bool operator()(const BootParameters::Disc& disc) const
+  {
+    config->SetRunningGameMetadata(*disc.volume, disc.volume->GetGamePartition());
+    config->bWii = disc.volume->GetVolumeType() == DiscIO::Platform::WII_DISC;
+    config->m_disc_booted_from_game_list = true;
+    *region = disc.volume->GetRegion();
+    return true;
+  }
+
+  bool operator()(const BootParameters::Executable& executable) const
+  {
+    if (!executable.reader->IsValid())
+      return false;
+
+    config->bWii = executable.reader->IsWii();
+
+    // TODO: Right now GC homebrew boots in NTSC and Wii homebrew in PAL.
+    // This is intentional so that Wii homebrew can boot in both 50Hz and 60Hz,
+    // without forcing all GC homebrew to 50Hz.
+    // In the future, it probably makes sense to add a Region setting for homebrew somewhere in
+    // the emulator config.
+    *region = config->bWii ? DiscIO::Region::PAL : DiscIO::Region::NTSC_U;
+
+    // Strip the .elf/.dol file extension and directories before the name
+    SplitPath(executable.path, nullptr, &config->m_debugger_game_id, nullptr);
+    return true;
+  }
+
+  bool operator()(const BootParameters::NAND& nand) const
+  {
+    const auto& loader = DiscIO::NANDContentManager::Access().GetNANDLoader(nand.content_path);
+    if (!loader.IsValid())
+      return false;
+
+    const IOS::ES::TMDReader& tmd = loader.GetTMD();
+
+    config->SetRunningGameMetadata(tmd);
+    config->bWii = true;
+    *region = tmd.GetRegion();
+    return true;
+  }
+
+  bool operator()(const BootParameters::IPL& ipl) const
+  {
+    config->bWii = false;
+    *region = ipl.region;
+    return true;
+  }
+
+  bool operator()(const BootParameters::DFF& dff) const
+  {
+    std::unique_ptr<FifoDataFile> dff_file(FifoDataFile::Load(dff.dff_path, true));
+    if (!dff_file)
+      return false;
+
+    config->bWii = dff_file->GetIsWii();
+    *region = DiscIO::Region::NTSC_U;
+    return true;
+  }
+
+private:
+  SConfig* config;
+  DiscIO::Region* region;
+};
+
+bool SConfig::SetPathsAndGameMetadata(const BootParameters& boot)
+{
+  m_is_mios = false;
+  m_disc_booted_from_game_list = false;
+  DiscIO::Region region;
+  if (!std::visit(SetGameMetadata(this, &region), boot.parameters))
+    return false;
+
+  // Set up region
   const char* retrieved_region_dir = GetDirectoryForRegion(region);
   m_region = retrieved_region_dir ? region : DiscIO::Region::PAL;
-  *directory_name = retrieved_region_dir ? retrieved_region_dir : EUR_DIR;
-  return !!retrieved_region_dir;
-}
-
-bool SConfig::AutoSetup(EBootBS2 _BootBS2)
-{
-  std::string set_region_dir(EUR_DIR);
-
-  switch (_BootBS2)
+  const std::string set_region_dir = retrieved_region_dir ? retrieved_region_dir : EUR_DIR;
+  if (!retrieved_region_dir &&
+      !PanicYesNoT("Your GCM/ISO file seems to be invalid (invalid country)."
+                   "\nContinue with PAL region?"))
   {
-  case BOOT_DEFAULT:
-  {
-    bool bootDrive = cdio_is_cdrom(m_strFilename);
-    // Check if the file exist, we may have gotten it from a --elf command line
-    // that gave an incorrect file name
-    if (!bootDrive && !File::Exists(m_strFilename))
-    {
-      PanicAlertT("The specified file \"%s\" does not exist", m_strFilename.c_str());
-      return false;
-    }
-
-    std::string Extension;
-    SplitPath(m_strFilename, nullptr, nullptr, &Extension);
-    if (!strcasecmp(Extension.c_str(), ".gcm") || !strcasecmp(Extension.c_str(), ".iso") ||
-        !strcasecmp(Extension.c_str(), ".tgc") || !strcasecmp(Extension.c_str(), ".wbfs") ||
-        !strcasecmp(Extension.c_str(), ".ciso") || !strcasecmp(Extension.c_str(), ".gcz") ||
-        bootDrive)
-    {
-      m_BootType = BOOT_ISO;
-      std::unique_ptr<DiscIO::IVolume> pVolume(DiscIO::CreateVolumeFromFilename(m_strFilename));
-      if (pVolume == nullptr)
-      {
-        if (bootDrive)
-          PanicAlertT("Could not read \"%s\". "
-                      "There is no disc in the drive or it is not a GameCube/Wii backup. "
-                      "Please note that Dolphin cannot play games directly from the original "
-                      "GameCube and Wii discs.",
-                      m_strFilename.c_str());
-        else
-          PanicAlertT("\"%s\" is an invalid GCM/ISO file, or is not a GC/Wii ISO.",
-                      m_strFilename.c_str());
-        return false;
-      }
-      SetRunningGameMetadata(*pVolume, pVolume->GetGamePartition());
-
-      // Check if we have a Wii disc
-      bWii = pVolume->GetVolumeType() == DiscIO::Platform::WII_DISC;
-
-      if (!SetRegion(pVolume->GetRegion(), &set_region_dir))
-        if (!PanicYesNoT("Your GCM/ISO file seems to be invalid (invalid country)."
-                         "\nContinue with PAL region?"))
-          return false;
-    }
-    else if (!strcasecmp(Extension.c_str(), ".elf"))
-    {
-      bWii = CBoot::IsElfWii(m_strFilename);
-      // TODO: Right now GC homebrew boots in NTSC and Wii homebrew in PAL.
-      // This is intentional so that Wii homebrew can boot in both 50Hz and 60Hz, without forcing
-      // all GC homebrew to 50Hz.
-      // In the future, it probably makes sense to add a Region setting for homebrew somewhere in
-      // the emulator config.
-      SetRegion(bWii ? DiscIO::Region::PAL : DiscIO::Region::NTSC_U, &set_region_dir);
-      m_BootType = BOOT_ELF;
-    }
-    else if (!strcasecmp(Extension.c_str(), ".dol"))
-    {
-      CDolLoader dolfile(m_strFilename);
-      bWii = dolfile.IsWii();
-      // TODO: See the ELF code above.
-      SetRegion(bWii ? DiscIO::Region::PAL : DiscIO::Region::NTSC_U, &set_region_dir);
-      m_BootType = BOOT_DOL;
-    }
-    else if (!strcasecmp(Extension.c_str(), ".dff"))
-    {
-      bWii = true;
-      SetRegion(DiscIO::Region::NTSC_U, &set_region_dir);
-      m_BootType = BOOT_DFF;
-
-      std::unique_ptr<FifoDataFile> ddfFile(FifoDataFile::Load(m_strFilename, true));
-
-      if (ddfFile)
-      {
-        bWii = ddfFile->GetIsWii();
-      }
-    }
-    else if (DiscIO::CNANDContentManager::Access().GetNANDLoader(m_strFilename).IsValid())
-    {
-      const DiscIO::CNANDContentLoader& content_loader =
-          DiscIO::CNANDContentManager::Access().GetNANDLoader(m_strFilename);
-      const IOS::ES::TMDReader& tmd = content_loader.GetTMD();
-
-      if (!IOS::ES::IsChannel(tmd.GetTitleId()))
-      {
-        PanicAlertT("This WAD is not bootable.");
-        return false;
-      }
-
-      SetRegion(tmd.GetRegion(), &set_region_dir);
-      SetRunningGameMetadata(tmd);
-
-      bWii = true;
-      m_BootType = BOOT_WII_NAND;
-    }
-    else
-    {
-      PanicAlertT("Could not recognize ISO file %s", m_strFilename.c_str());
-      return false;
-    }
-  }
-  break;
-
-  case BOOT_BS2_USA:
-    SetRegion(DiscIO::Region::NTSC_U, &set_region_dir);
-    m_strFilename.clear();
-    m_BootType = SConfig::BOOT_BS2;
-    break;
-
-  case BOOT_BS2_JAP:
-    SetRegion(DiscIO::Region::NTSC_J, &set_region_dir);
-    m_strFilename.clear();
-    m_BootType = SConfig::BOOT_BS2;
-    break;
-
-  case BOOT_BS2_EUR:
-    SetRegion(DiscIO::Region::PAL, &set_region_dir);
-    m_strFilename.clear();
-    m_BootType = SConfig::BOOT_BS2;
-    break;
+    return false;
   }
 
-  // Setup paths
+  // Set up paths
   CheckMemcardPath(SConfig::GetInstance().m_strMemoryCardA, set_region_dir, true);
   CheckMemcardPath(SConfig::GetInstance().m_strMemoryCardB, set_region_dir, false);
   m_strSRAM = File::GetUserPath(F_GCSRAM_IDX);
-  if (!bWii)
-  {
-    if (!bHLE_BS2)
-    {
-      m_strBootROM = GetBootROMPath(set_region_dir);
-
-      if (!File::Exists(m_strBootROM))
-      {
-        WARN_LOG(BOOT, "Bootrom file %s not found - using HLE.", m_strBootROM.c_str());
-        bHLE_BS2 = true;
-      }
-    }
-  }
-  else if (bWii && !bHLE_BS2)
-  {
-    WARN_LOG(BOOT, "GC bootrom file will not be loaded for Wii mode.");
-    bHLE_BS2 = true;
-  }
+  m_strBootROM = GetBootROMPath(set_region_dir);
 
   return true;
 }

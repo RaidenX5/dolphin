@@ -12,11 +12,13 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include <mbedtls/sha1.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Crypto/ec.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/Swap.h"

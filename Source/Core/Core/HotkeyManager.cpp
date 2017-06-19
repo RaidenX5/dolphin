@@ -4,6 +4,8 @@
 
 #include "Core/HotkeyManager.h"
 
+#include <algorithm>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -14,7 +16,6 @@
 #include "InputCommon/ControllerEmu/Control/Input.h"
 #include "InputCommon/ControllerEmu/ControlGroup/Buttons.h"
 #include "InputCommon/ControllerEmu/ControlGroup/ControlGroup.h"
-#include "InputCommon/ControllerEmu/Setting/BooleanSetting.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/GCPadStatus.h"
 

@@ -35,16 +35,6 @@
     <Import Project="..\..\VSProps\PCHUse.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile>
-      <ObjectFileName>$(IntDir)/%(RelativeDir)/</ObjectFileName>
-    </ClCompile>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile>
-      <ObjectFileName>$(IntDir)/%(RelativeDir)/</ObjectFileName>
-    </ClCompile>
-  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ActionReplay.cpp" />
     <ClCompile Include="Analytics.cpp" />
@@ -52,9 +42,8 @@
     <ClCompile Include="BootManager.cpp" />
     <ClCompile Include="Boot\Boot.cpp" />
     <ClCompile Include="Boot\Boot_BS2Emu.cpp" />
-    <ClCompile Include="Boot\Boot_DOL.cpp" />
-    <ClCompile Include="Boot\Boot_ELF.cpp" />
     <ClCompile Include="Boot\Boot_WiiWAD.cpp" />
+    <ClCompile Include="Boot\DolReader.cpp" />
     <ClCompile Include="Boot\ElfReader.cpp" />
     <ClCompile Include="Config\Config.cpp" />
     <ClCompile Include="Config\GraphicsSettings.cpp" />
@@ -215,7 +204,7 @@
     <ClCompile Include="IOS\Network\KD\NetKDRequest.cpp" />
     <ClCompile Include="IOS\Network\KD\NetKDTime.cpp" />
     <ClCompile Include="IOS\Network\KD\NWC24Config.cpp" />
-    <ClCompile Include="IOS\Network\NCD\Config.cpp" />
+    <ClCompile Include="IOS\Network\NCD\WiiNetConfig.cpp" />
     <ClCompile Include="IOS\Network\NCD\Manage.cpp" />
     <ClCompile Include="IOS\Network\WD\Command.cpp" />
     <ClCompile Include="IOS\SDIO\SDIOSlot0.cpp" />
@@ -308,7 +297,7 @@
     <ClInclude Include="ARDecrypt.h" />
     <ClInclude Include="BootManager.h" />
     <ClInclude Include="Boot\Boot.h" />
-    <ClInclude Include="Boot\Boot_DOL.h" />
+    <ClInclude Include="Boot\DolReader.h" />
     <ClInclude Include="Boot\ElfReader.h" />
     <ClInclude Include="Boot\ElfTypes.h" />
     <ClInclude Include="Config\Config.h" />
@@ -426,6 +415,9 @@
     <ClInclude Include="HW\SystemTimers.h" />
     <ClInclude Include="HW\VideoInterface.h" />
     <ClInclude Include="HW\Wiimote.h" />
+    <ClInclude Include="HW\WiimoteCommon\WiimoteConstants.h" />
+    <ClInclude Include="HW\WiimoteCommon\WiimoteHid.h" />
+    <ClInclude Include="HW\WiimoteCommon\WiimoteReport.h" />
     <ClInclude Include="HW\WiimoteEmu\Attachment\Attachment.h" />
     <ClInclude Include="HW\WiimoteEmu\Attachment\Classic.h" />
     <ClInclude Include="HW\WiimoteEmu\Attachment\Drums.h" />
@@ -449,7 +441,6 @@
     <ClInclude Include="IOS\DI\DI.h" />
     <ClInclude Include="IOS\ES\ES.h" />
     <ClInclude Include="IOS\ES\Formats.h" />
-    <ClInclude Include="IOS\ES\NandUtils.h" />
     <ClInclude Include="IOS\FS\FileIO.h" />
     <ClInclude Include="IOS\FS\FS.h" />
     <ClInclude Include="IOS\Network\ICMPLin.h" />
@@ -461,7 +452,7 @@
     <ClInclude Include="IOS\Network\KD\NetKDRequest.h" />
     <ClInclude Include="IOS\Network\KD\NetKDTime.h" />
     <ClInclude Include="IOS\Network\KD\NWC24Config.h" />
-    <ClInclude Include="IOS\Network\NCD\Config.h" />
+    <ClInclude Include="IOS\Network\NCD\WiiNetConfig.h" />
     <ClInclude Include="IOS\Network\NCD\Manage.h" />
     <ClInclude Include="IOS\Network\WD\Command.h" />
     <ClInclude Include="IOS\SDIO\SDIOSlot0.h" />
@@ -576,8 +567,11 @@
     <ProjectReference Include="$(CoreDir)VideoCommon\VideoCommon.vcxproj">
       <Project>{3de9ee35-3e91-4f27-a014-2866ad8c3fe3}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\..\Externals\cubeb\msvc\cubeb.vcxproj">
+    <ProjectReference Include="$(ExternalsDir)cubeb\msvc\cubeb.vcxproj">
       <Project>{8ea11166-6512-44fc-b7a5-a4d1ecc81170}</Project>
+    </ProjectReference>
+    <ProjectReference Include="$(ExternalsDir)pugixml\pugixml.vcxproj">
+      <Project>{38fee76f-f347-484b-949c-b4649381cffb}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

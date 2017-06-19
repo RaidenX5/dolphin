@@ -4,13 +4,13 @@
 
 #include <cstddef>
 #include <cstring>
+#include <string>
 
 #include "Common/Atomic.h"
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
 
 #include "Core/ConfigManager.h"
-#include "Core/Core.h"
 #include "Core/HW/CPU.h"
 #include "Core/HW/GPFifo.h"
 #include "Core/HW/MMIO.h"

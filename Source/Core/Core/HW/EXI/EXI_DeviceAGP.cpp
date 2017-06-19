@@ -4,12 +4,14 @@
 
 #include "Core/HW/EXI/EXI_DeviceAGP.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
+#include "Common/File.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"

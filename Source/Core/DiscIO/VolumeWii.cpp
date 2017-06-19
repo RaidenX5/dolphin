@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "DiscIO/VolumeWiiCrypted.h"
+#include "DiscIO/VolumeWii.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -31,10 +31,17 @@ namespace DiscIO
 {
 constexpr u64 PARTITION_DATA_OFFSET = 0x20000;
 
-CVolumeWiiCrypted::CVolumeWiiCrypted(std::unique_ptr<IBlobReader> reader)
-    : m_pReader(std::move(reader)), m_game_partition(PARTITION_NONE), m_last_decrypted_block(-1)
+VolumeWii::VolumeWii(std::unique_ptr<BlobReader> reader)
+    : m_pReader(std::move(reader)), m_game_partition(PARTITION_NONE),
+      m_last_decrypted_block(UINT64_MAX)
 {
   _assert_(m_pReader);
+
+  if (m_pReader->ReadSwapped<u32>(0x60) != u32(0))
+  {
+    // No partitions - just read unencrypted data like with a GC disc
+    return;
+  }
 
   // Get tickets, TMDs, and decryption keys for all partitions
   for (u32 partition_group = 0; partition_group < 4; ++partition_group)
@@ -44,7 +51,8 @@ CVolumeWiiCrypted::CVolumeWiiCrypted(std::unique_ptr<IBlobReader> reader)
     if (!number_of_partitions)
       continue;
 
-    std::optional<u32> read_buffer = m_pReader->ReadSwapped<u32>(0x40000 + (partition_group * 8) + 4);
+    std::optional<u32> read_buffer =
+        m_pReader->ReadSwapped<u32>(0x40000 + (partition_group * 8) + 4);
     if (!read_buffer)
       continue;
     const u64 partition_table_offset = static_cast<u64>(*read_buffer) << 2;
@@ -57,14 +65,10 @@ CVolumeWiiCrypted::CVolumeWiiCrypted(std::unique_ptr<IBlobReader> reader)
         continue;
       const u64 partition_offset = static_cast<u64>(*read_buffer) << 2;
 
-      // Set m_game_partition if this is the game partition
-      if (m_game_partition == PARTITION_NONE)
-      {
-        const std::optional<u32> partition_type =
-            m_pReader->ReadSwapped<u32>(partition_table_offset + (i * 8) + 4);
-        if (partition_type == u32(0))
-          m_game_partition = Partition(partition_offset);
-      }
+      // Check if this is the game partition
+      const bool is_game_partition =
+          m_game_partition == PARTITION_NONE &&
+          m_pReader->ReadSwapped<u32>(partition_table_offset + (i * 8) + 4) == u32(0);
 
       // Read ticket
       std::vector<u8> ticket_buffer(sizeof(IOS::ES::Ticket));
@@ -105,16 +109,17 @@ CVolumeWiiCrypted::CVolumeWiiCrypted(std::unique_ptr<IBlobReader> reader)
       m_partition_keys[partition] = std::move(aes_context);
       m_partition_tickets[partition] = std::move(ticket);
       m_partition_tmds[partition] = std::move(tmd);
+      if (is_game_partition)
+        m_game_partition = partition;
     }
   }
 }
 
-CVolumeWiiCrypted::~CVolumeWiiCrypted()
+VolumeWii::~VolumeWii()
 {
 }
 
-bool CVolumeWiiCrypted::Read(u64 _ReadOffset, u64 _Length, u8* _pBuffer,
-                             const Partition& partition) const
+bool VolumeWii::Read(u64 _ReadOffset, u64 _Length, u8* _pBuffer, const Partition& partition) const
 {
   if (partition == PARTITION_NONE)
     return m_pReader->Read(_ReadOffset, _Length, _pBuffer);
@@ -167,7 +172,7 @@ bool CVolumeWiiCrypted::Read(u64 _ReadOffset, u64 _Length, u8* _pBuffer,
   return true;
 }
 
-std::vector<Partition> CVolumeWiiCrypted::GetPartitions() const
+std::vector<Partition> VolumeWii::GetPartitions() const
 {
   std::vector<Partition> partitions;
   for (const auto& pair : m_partition_keys)
@@ -175,12 +180,12 @@ std::vector<Partition> CVolumeWiiCrypted::GetPartitions() const
   return partitions;
 }
 
-Partition CVolumeWiiCrypted::GetGamePartition() const
+Partition VolumeWii::GetGamePartition() const
 {
   return m_game_partition;
 }
 
-std::optional<u64> CVolumeWiiCrypted::GetTitleID(const Partition& partition) const
+std::optional<u64> VolumeWii::GetTitleID(const Partition& partition) const
 {
   const IOS::ES::TicketReader& ticket = GetTicket(partition);
   if (!ticket.IsValid())
@@ -188,19 +193,19 @@ std::optional<u64> CVolumeWiiCrypted::GetTitleID(const Partition& partition) con
   return ticket.GetTitleId();
 }
 
-const IOS::ES::TicketReader& CVolumeWiiCrypted::GetTicket(const Partition& partition) const
+const IOS::ES::TicketReader& VolumeWii::GetTicket(const Partition& partition) const
 {
   auto it = m_partition_tickets.find(partition);
   return it != m_partition_tickets.end() ? it->second : INVALID_TICKET;
 }
 
-const IOS::ES::TMDReader& CVolumeWiiCrypted::GetTMD(const Partition& partition) const
+const IOS::ES::TMDReader& VolumeWii::GetTMD(const Partition& partition) const
 {
   auto it = m_partition_tmds.find(partition);
   return it != m_partition_tmds.end() ? it->second : INVALID_TMD;
 }
 
-u64 CVolumeWiiCrypted::PartitionOffsetToRawOffset(u64 offset, const Partition& partition)
+u64 VolumeWii::PartitionOffsetToRawOffset(u64 offset, const Partition& partition)
 {
   if (partition == PARTITION_NONE)
     return offset;
@@ -209,7 +214,7 @@ u64 CVolumeWiiCrypted::PartitionOffsetToRawOffset(u64 offset, const Partition& p
          (offset % BLOCK_DATA_SIZE);
 }
 
-std::string CVolumeWiiCrypted::GetGameID(const Partition& partition) const
+std::string VolumeWii::GetGameID(const Partition& partition) const
 {
   char ID[6];
 
@@ -219,13 +224,13 @@ std::string CVolumeWiiCrypted::GetGameID(const Partition& partition) const
   return DecodeString(ID);
 }
 
-Region CVolumeWiiCrypted::GetRegion() const
+Region VolumeWii::GetRegion() const
 {
   const std::optional<u32> region_code = m_pReader->ReadSwapped<u32>(0x4E000);
   return region_code ? static_cast<Region>(*region_code) : Region::UNKNOWN_REGION;
 }
 
-Country CVolumeWiiCrypted::GetCountry(const Partition& partition) const
+Country VolumeWii::GetCountry(const Partition& partition) const
 {
   // The 0 that we use as a default value is mapped to COUNTRY_UNKNOWN and UNKNOWN_REGION
   u8 country_byte = ReadSwapped<u8>(3, partition).value_or(0);
@@ -237,7 +242,7 @@ Country CVolumeWiiCrypted::GetCountry(const Partition& partition) const
   return CountrySwitch(country_byte);
 }
 
-std::string CVolumeWiiCrypted::GetMakerID(const Partition& partition) const
+std::string VolumeWii::GetMakerID(const Partition& partition) const
 {
   char makerID[2];
 
@@ -247,13 +252,13 @@ std::string CVolumeWiiCrypted::GetMakerID(const Partition& partition) const
   return DecodeString(makerID);
 }
 
-std::optional<u16> CVolumeWiiCrypted::GetRevision(const Partition& partition) const
+std::optional<u16> VolumeWii::GetRevision(const Partition& partition) const
 {
   std::optional<u8> revision = ReadSwapped<u8>(7, partition);
   return revision ? *revision : std::optional<u16>();
 }
 
-std::string CVolumeWiiCrypted::GetInternalName(const Partition& partition) const
+std::string VolumeWii::GetInternalName(const Partition& partition) const
 {
   char name_buffer[0x60];
   if (Read(0x20, 0x60, (u8*)&name_buffer, partition))
@@ -262,19 +267,20 @@ std::string CVolumeWiiCrypted::GetInternalName(const Partition& partition) const
   return "";
 }
 
-std::map<Language, std::string> CVolumeWiiCrypted::GetLongNames() const
+std::map<Language, std::string> VolumeWii::GetLongNames() const
 {
-  std::unique_ptr<IFileSystem> file_system(CreateFileSystem(this, GetGamePartition()));
+  std::unique_ptr<FileSystem> file_system(CreateFileSystem(this, GetGamePartition()));
   if (!file_system)
     return {};
 
   std::vector<u8> opening_bnr(NAMES_TOTAL_BYTES);
-  size_t size = file_system->ReadFile("opening.bnr", opening_bnr.data(), opening_bnr.size(), 0x5C);
-  opening_bnr.resize(size);
+  std::unique_ptr<FileInfo> file_info = file_system->FindFileInfo("opening.bnr");
+  opening_bnr.resize(
+      file_system->ReadFile(file_info.get(), opening_bnr.data(), opening_bnr.size(), 0x5C));
   return ReadWiiNames(opening_bnr);
 }
 
-std::vector<u32> CVolumeWiiCrypted::GetBanner(int* width, int* height) const
+std::vector<u32> VolumeWii::GetBanner(int* width, int* height) const
 {
   *width = 0;
   *height = 0;
@@ -286,7 +292,7 @@ std::vector<u32> CVolumeWiiCrypted::GetBanner(int* width, int* height) const
   return GetWiiBanner(width, height, *title_id);
 }
 
-std::string CVolumeWiiCrypted::GetApploaderDate(const Partition& partition) const
+std::string VolumeWii::GetApploaderDate(const Partition& partition) const
 {
   char date[16];
 
@@ -296,32 +302,32 @@ std::string CVolumeWiiCrypted::GetApploaderDate(const Partition& partition) cons
   return DecodeString(date);
 }
 
-Platform CVolumeWiiCrypted::GetVolumeType() const
+Platform VolumeWii::GetVolumeType() const
 {
   return Platform::WII_DISC;
 }
 
-std::optional<u8> CVolumeWiiCrypted::GetDiscNumber(const Partition& partition) const
+std::optional<u8> VolumeWii::GetDiscNumber(const Partition& partition) const
 {
   return ReadSwapped<u8>(6, partition);
 }
 
-BlobType CVolumeWiiCrypted::GetBlobType() const
+BlobType VolumeWii::GetBlobType() const
 {
   return m_pReader->GetBlobType();
 }
 
-u64 CVolumeWiiCrypted::GetSize() const
+u64 VolumeWii::GetSize() const
 {
   return m_pReader->GetDataSize();
 }
 
-u64 CVolumeWiiCrypted::GetRawSize() const
+u64 VolumeWii::GetRawSize() const
 {
   return m_pReader->GetRawSize();
 }
 
-bool CVolumeWiiCrypted::CheckIntegrity(const Partition& partition) const
+bool VolumeWii::CheckIntegrity(const Partition& partition) const
 {
   // Get the decryption key for the partition
   auto it = m_partition_keys.find(partition);

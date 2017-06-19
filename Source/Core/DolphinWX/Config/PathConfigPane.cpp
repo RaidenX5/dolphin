@@ -144,7 +144,14 @@ void PathConfigPane::BindEvents()
   m_wii_sdcard_filepicker->Bind(wxEVT_FILEPICKER_CHANGED, &PathConfigPane::OnSdCardPathChanged,
                                 this);
 
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreNotRunning);
+  Bind(wxEVT_UPDATE_UI, &PathConfigPane::OnEnableIfCoreNotRunning, this);
+}
+
+void PathConfigPane::OnEnableIfCoreNotRunning(wxUpdateUIEvent& event)
+{
+  // Prevent the Remove button from being enabled via wxUpdateUIEvent
+  if (event.GetId() != m_remove_iso_path_button->GetId())
+    WxEventUtils::OnEnableIfCoreNotRunning(event);
 }
 
 void PathConfigPane::OnISOPathSelectionChanged(wxCommandEvent& event)
@@ -224,7 +231,7 @@ void PathConfigPane::OnNANDRootChanged(wxCommandEvent& event)
   File::SetUserPath(D_WIIROOT_IDX, nand_path);
   m_nand_root_dirpicker->SetPath(StrToWxStr(nand_path));
 
-  DiscIO::CNANDContentManager::Access().ClearCache();
+  DiscIO::NANDContentManager::Access().ClearCache();
 
   wxCommandEvent update_event{DOLPHIN_EVT_UPDATE_LOAD_WII_MENU_ITEM, GetId()};
   update_event.SetEventObject(this);

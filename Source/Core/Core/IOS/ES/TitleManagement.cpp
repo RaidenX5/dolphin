@@ -14,13 +14,13 @@
 
 #include "Common/Align.h"
 #include "Common/Crypto/AES.h"
+#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
 #include "Common/StringUtil.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/ES/Formats.h"
-#include "Core/IOS/ES/NandUtils.h"
 #include "Core/ec_wii.h"
 #include "DiscIO/NANDContentLoader.h"
 
@@ -41,11 +41,11 @@ static ReturnCode WriteTicket(const IOS::ES::TicketReader& ticket)
   if (!ticket_file)
     return ES_EIO;
 
-  const std::vector<u8>& raw_ticket = ticket.GetRawTicket();
+  const std::vector<u8>& raw_ticket = ticket.GetBytes();
   return ticket_file.WriteBytes(raw_ticket.data(), raw_ticket.size()) ? IPC_SUCCESS : ES_EIO;
 }
 
-ReturnCode ES::ImportTicket(const std::vector<u8>& ticket_bytes)
+ReturnCode ES::ImportTicket(const std::vector<u8>& ticket_bytes, const std::vector<u8>& cert_chain)
 {
   IOS::ES::TicketReader ticket{ticket_bytes};
   if (!ticket.IsValid())
@@ -69,6 +69,11 @@ ReturnCode ES::ImportTicket(const std::vector<u8>& ticket_bytes)
     }
   }
 
+  const ReturnCode verify_ret =
+      VerifyContainer(VerifyContainerType::Ticket, VerifyMode::UpdateCertStore, ticket, cert_chain);
+  if (verify_ret != IPC_SUCCESS)
+    return verify_ret;
+
   const ReturnCode write_ret = WriteTicket(ticket);
   if (write_ret != IPC_SUCCESS)
     return write_ret;
@@ -84,7 +89,9 @@ IPCCommandResult ES::ImportTicket(const IOCtlVRequest& request)
 
   std::vector<u8> bytes(request.in_vectors[0].size);
   Memory::CopyFromEmu(bytes.data(), request.in_vectors[0].address, request.in_vectors[0].size);
-  return GetDefaultReply(ImportTicket(bytes));
+  std::vector<u8> cert_chain(request.in_vectors[1].size);
+  Memory::CopyFromEmu(cert_chain.data(), request.in_vectors[1].address, request.in_vectors[1].size);
+  return GetDefaultReply(ImportTicket(bytes, cert_chain));
 }
 
 ReturnCode ES::ImportTmd(Context& context, const std::vector<u8>& tmd_bytes)
@@ -92,11 +99,24 @@ ReturnCode ES::ImportTmd(Context& context, const std::vector<u8>& tmd_bytes)
   // Ioctlv 0x2b writes the TMD to /tmp/title.tmd (for imports) and doesn't seem to write it
   // to either /import or /title. So here we simply have to set the import TMD.
   context.title_import.tmd.SetBytes(tmd_bytes);
-  // TODO: validate TMDs and return the proper error code (-1027) if the signature type is invalid.
   if (!context.title_import.tmd.IsValid())
     return ES_EINVAL;
 
-  if (!IOS::ES::InitImport(context.title_import.tmd.GetTitleId()))
+  std::vector<u8> cert_store;
+  ReturnCode ret = ReadCertStore(&cert_store);
+  if (ret != IPC_SUCCESS)
+    return ret;
+
+  ret = VerifyContainer(VerifyContainerType::TMD, VerifyMode::UpdateCertStore,
+                        context.title_import.tmd, cert_store);
+  if (ret != IPC_SUCCESS)
+  {
+    // Reset the import context so that further calls consider the state as invalid.
+    context.title_import.tmd.SetBytes({});
+    return ret;
+  }
+
+  if (!InitImport(context.title_import.tmd.GetTitleId()))
     return ES_EIO;
 
   return IPC_SUCCESS;
@@ -115,16 +135,8 @@ IPCCommandResult ES::ImportTmd(Context& context, const IOCtlVRequest& request)
   return GetDefaultReply(ImportTmd(context, tmd));
 }
 
-static void CleanUpStaleImport(const u64 title_id)
-{
-  const auto import_tmd = IOS::ES::FindImportTMD(title_id);
-  if (!import_tmd.IsValid())
-    File::DeleteDirRecursively(Common::GetImportTitlePath(title_id) + "/content");
-  else
-    IOS::ES::FinishImport(import_tmd);
-}
-
-ReturnCode ES::ImportTitleInit(Context& context, const std::vector<u8>& tmd_bytes)
+ReturnCode ES::ImportTitleInit(Context& context, const std::vector<u8>& tmd_bytes,
+                               const std::vector<u8>& cert_chain)
 {
   INFO_LOG(IOS_ES, "ImportTitleInit");
   context.title_import.tmd.SetBytes(tmd_bytes);
@@ -135,12 +147,35 @@ ReturnCode ES::ImportTitleInit(Context& context, const std::vector<u8>& tmd_byte
   }
 
   // Finish a previous import (if it exists).
-  CleanUpStaleImport(context.title_import.tmd.GetTitleId());
+  FinishStaleImport(context.title_import.tmd.GetTitleId());
 
-  if (!IOS::ES::InitImport(context.title_import.tmd.GetTitleId()))
+  ReturnCode ret = VerifyContainer(VerifyContainerType::TMD, VerifyMode::UpdateCertStore,
+                                   context.title_import.tmd, cert_chain);
+  if (ret != IPC_SUCCESS)
+  {
+    context.title_import.tmd.SetBytes({});
+    return ret;
+  }
+
+  const auto ticket = DiscIO::FindSignedTicket(context.title_import.tmd.GetTitleId());
+  if (!ticket.IsValid())
+    return ES_NO_TICKET;
+
+  std::vector<u8> cert_store;
+  ret = ReadCertStore(&cert_store);
+  if (ret != IPC_SUCCESS)
+    return ret;
+
+  ret = VerifyContainer(VerifyContainerType::Ticket, VerifyMode::DoNotUpdateCertStore, ticket,
+                        cert_store);
+  if (ret != IPC_SUCCESS)
+  {
+    context.title_import.tmd.SetBytes({});
+    return ret;
+  }
+
+  if (!InitImport(context.title_import.tmd.GetTitleId()))
     return ES_EIO;
-
-  // TODO: check and use the other vectors.
 
   return IPC_SUCCESS;
 }
@@ -155,7 +190,9 @@ IPCCommandResult ES::ImportTitleInit(Context& context, const IOCtlVRequest& requ
 
   std::vector<u8> tmd(request.in_vectors[0].size);
   Memory::CopyFromEmu(tmd.data(), request.in_vectors[0].address, request.in_vectors[0].size);
-  return GetDefaultReply(ImportTitleInit(context, tmd));
+  std::vector<u8> certs(request.in_vectors[1].size);
+  Memory::CopyFromEmu(certs.data(), request.in_vectors[1].address, request.in_vectors[1].size);
+  return GetDefaultReply(ImportTitleInit(context, tmd, certs));
 }
 
 ReturnCode ES::ImportContentBegin(Context& context, u64 title_id, u32 content_id)
@@ -340,7 +377,7 @@ ReturnCode ES::ImportTitleCancel(Context& context)
   if (!context.title_import.tmd.IsValid())
     return ES_EINVAL;
 
-  CleanUpStaleImport(context.title_import.tmd.GetTitleId());
+  FinishStaleImport(context.title_import.tmd.GetTitleId());
 
   INFO_LOG(IOS_ES, "ImportTitleCancel: title %016" PRIx64, context.title_import.tmd.GetTitleId());
   context.title_import.tmd.SetBytes({});
@@ -375,8 +412,8 @@ ReturnCode ES::DeleteTitle(u64 title_id)
     ERROR_LOG(IOS_ES, "DeleteTitle: Failed to delete title directory: %s", title_dir.c_str());
     return FS_EACCESS;
   }
-  // XXX: ugly, but until we drop CNANDContentManager everywhere, this is going to be needed.
-  DiscIO::CNANDContentManager::Access().ClearCache();
+  // XXX: ugly, but until we drop NANDContentManager everywhere, this is going to be needed.
+  DiscIO::NANDContentManager::Access().ClearCache();
 
   return IPC_SUCCESS;
 }
@@ -404,7 +441,7 @@ ReturnCode ES::DeleteTicket(const u8* ticket_view)
   const u64 ticket_id = Common::swap64(ticket_view + offsetof(IOS::ES::TicketView, ticket_id));
   ticket.DeleteTicket(ticket_id);
 
-  const std::vector<u8>& new_ticket = ticket.GetRawTicket();
+  const std::vector<u8>& new_ticket = ticket.GetBytes();
   const std::string ticket_path = Common::GetTicketFileName(title_id, Common::FROM_SESSION_ROOT);
   {
     File::IOFile ticket_file(ticket_path, "wb");
@@ -467,7 +504,7 @@ ReturnCode ES::DeleteContent(u64 title_id, u32 content_id) const
   if (!CanDeleteTitle(title_id))
     return ES_EINVAL;
 
-  const auto tmd = IOS::ES::FindInstalledTMD(title_id);
+  const auto tmd = FindInstalledTMD(title_id);
   if (!tmd.IsValid())
     return FS_ENOENT;
 
@@ -501,7 +538,7 @@ ReturnCode ES::ExportTitleInit(Context& context, u64 title_id, u8* tmd_bytes, u3
   if (context.title_export.valid)
     return ES_EINVAL;
 
-  const auto tmd = IOS::ES::FindInstalledTMD(title_id);
+  const auto tmd = FindInstalledTMD(title_id);
   if (!tmd.IsValid())
     return FS_ENOENT;
 
@@ -515,7 +552,7 @@ ReturnCode ES::ExportTitleInit(Context& context, u64 title_id, u8* tmd_bytes, u3
 
   context.title_export.title_key = ticket.GetTitleKey();
 
-  const auto& raw_tmd = context.title_export.tmd.GetRawTMD();
+  const std::vector<u8>& raw_tmd = context.title_export.tmd.GetBytes();
   if (tmd_size != raw_tmd.size())
     return ES_EINVAL;
 
@@ -686,12 +723,12 @@ ReturnCode ES::DeleteSharedContent(const std::array<u8, 20>& sha1) const
     return ES_EINVAL;
 
   // Check whether the shared content is used by a system title.
-  const std::vector<u64> titles = IOS::ES::GetInstalledTitles();
-  const bool is_used_by_system_title = std::any_of(titles.begin(), titles.end(), [&sha1](u64 id) {
+  const std::vector<u64> titles = GetInstalledTitles();
+  const bool is_used_by_system_title = std::any_of(titles.begin(), titles.end(), [&](u64 id) {
     if (!IOS::ES::IsTitleType(id, IOS::ES::TitleType::System))
       return false;
 
-    const auto tmd = IOS::ES::FindInstalledTMD(id);
+    const auto tmd = FindInstalledTMD(id);
     if (!tmd.IsValid())
       return true;
 
