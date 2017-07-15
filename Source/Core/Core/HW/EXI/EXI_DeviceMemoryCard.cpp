@@ -18,6 +18,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
 #include "Common/StringUtil.h"
+#include "Core/CommonTitles.h"
 #include "Core/ConfigManager.h"
 #include "Core/CoreTiming.h"
 #include "Core/HW/EXI/EXI.h"
@@ -160,7 +161,8 @@ void CEXIMemoryCard::SetupGciFolder(u16 sizeMb)
 
   const std::string& game_id = SConfig::GetInstance().GetGameID();
   u32 CurrentGameId = 0;
-  if (game_id.length() >= 4 && game_id != "00000000" && game_id != TITLEID_SYSMENU_STRING)
+  if (game_id.length() >= 4 && game_id != "00000000" &&
+      SConfig::GetInstance().GetTitleID() != Titles::SYSTEM_MENU)
     CurrentGameId = BE32((u8*)game_id.c_str());
 
   const bool shift_jis = region == DiscIO::Region::NTSC_J;
@@ -174,11 +176,12 @@ void CEXIMemoryCard::SetupGciFolder(u16 sizeMb)
   strDirectoryName = strDirectoryName + SConfig::GetDirectoryForRegion(region) + DIR_SEP +
                      StringFromFormat("Card %c", 'A' + card_index);
 
-  if (!File::Exists(strDirectoryName))  // first use of memcard folder, migrate automatically
+  const File::FileInfo file_info(strDirectoryName);
+  if (!file_info.Exists())  // first use of memcard folder, migrate automatically
   {
     MigrateFromMemcardFile(strDirectoryName + DIR_SEP, card_index);
   }
-  else if (!File::IsDirectory(strDirectoryName))
+  else if (!file_info.IsDirectory())
   {
     if (File::Rename(strDirectoryName, strDirectoryName + ".original"))
     {

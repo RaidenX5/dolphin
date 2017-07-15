@@ -47,6 +47,7 @@
 #include "DolphinWX/Main.h"
 #include "DolphinWX/NetPlay/NetWindow.h"
 #include "DolphinWX/SoftwareVideoConfigDialog.h"
+#include "DolphinWX/UINeedsControllerState.h"
 #include "DolphinWX/VideoConfigDiag.h"
 #include "DolphinWX/WxUtils.h"
 
@@ -208,9 +209,6 @@ void DolphinApp::MacOpenFile(const wxString& fileName)
 
 void DolphinApp::AfterInit()
 {
-  if (!m_batch_mode)
-    main_frame->UpdateGameList();
-
 #if defined(USE_ANALYTICS) && USE_ANALYTICS
   if (!SConfig::GetInstance().m_analytics_permission_asked)
   {
@@ -481,7 +479,7 @@ void Host_SetWiiMoteConnectionState(int _State)
     event.SetString(_("Wii Remote Connected"));
     break;
   }
-  // Update field 1 or 2
+  // The second field is used for auxiliary info such as this
   event.SetInt(1);
 
   NOTICE_LOG(WIIMOTE, "%s", static_cast<const char*>(event.GetString().c_str()));
@@ -489,9 +487,9 @@ void Host_SetWiiMoteConnectionState(int _State)
   main_frame->GetEventHandler()->AddPendingEvent(event);
 }
 
-bool Host_UIHasFocus()
+bool Host_UINeedsControllerState()
 {
-  return wxGetApp().IsActiveThreadsafe();
+  return wxGetApp().IsActiveThreadsafe() && GetUINeedsControllerState();
 }
 
 bool Host_RendererHasFocus()

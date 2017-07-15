@@ -21,10 +21,12 @@
 #include "Common/NandPaths.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
+#include "Core/CommonTitles.h"
 #include "Core/ConfigManager.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/ES/Formats.h"
 #include "Core/IOS/IOSC.h"
+#include "Core/ec_wii.h"
 #include "DiscIO/NANDContentLoader.h"
 
 namespace IOS
@@ -196,7 +198,7 @@ static bool UpdateUIDAndGID(Kernel& kernel, const IOS::ES::TMDReader& tmd)
 static ReturnCode CheckIsAllowedToSetUID(const u32 caller_uid)
 {
   IOS::ES::UIDSys uid_map{Common::FromWhichRoot::FROM_SESSION_ROOT};
-  const u32 system_menu_uid = uid_map.GetOrInsertUIDForTitle(TITLEID_SYSMENU);
+  const u32 system_menu_uid = uid_map.GetOrInsertUIDForTitle(Titles::SYSTEM_MENU);
   if (!system_menu_uid)
     return ES_SHORT_READ;
   return caller_uid == system_menu_uid ? IPC_SUCCESS : ES_EINVAL;
@@ -241,7 +243,23 @@ bool ES::LaunchTitle(u64 title_id, bool skip_reload)
   // (supposedly when trying to re-open those files).
   DiscIO::NANDContentManager::Access().ClearCache();
 
-  if (IsTitleType(title_id, IOS::ES::TitleType::System) && title_id != TITLEID_SYSMENU)
+  u32 device_id;
+  if (title_id == Titles::SHOP &&
+      (GetDeviceId(&device_id) != IPC_SUCCESS || device_id == DEFAULT_WII_DEVICE_ID))
+  {
+    ERROR_LOG(IOS_ES, "Refusing to launch the shop channel with default device credentials");
+    CriticalAlertT("You cannot use the Wii Shop Channel without using your own device credentials."
+                   "\nPlease refer to the NAND usage guide for setup instructions: "
+                   "https://dolphin-emu.org/docs/guides/nand-usage-guide/");
+
+    // Send the user back to the system menu instead of returning an error, which would
+    // likely make the system menu crash. Doing this is okay as anyone who has the shop
+    // also has the system menu installed, and this behaviour is consistent with what
+    // ES does when its DRM system refuses the use of a particular title.
+    return LaunchTitle(Titles::SYSTEM_MENU);
+  }
+
+  if (IsTitleType(title_id, IOS::ES::TitleType::System) && title_id != Titles::SYSTEM_MENU)
     return LaunchIOS(title_id);
   return LaunchPPCTitle(title_id, skip_reload);
 }
@@ -256,7 +274,7 @@ bool ES::LaunchPPCTitle(u64 title_id, bool skip_reload)
   const DiscIO::NANDContentLoader& content_loader = AccessContentDevice(title_id);
   if (!content_loader.IsValid())
   {
-    if (title_id == 0x0000000100000002)
+    if (title_id == Titles::SYSTEM_MENU)
     {
       PanicAlertT("Could not launch the Wii Menu because it is missing from the NAND.\n"
                   "The emulated software will likely hang now.");
@@ -303,15 +321,7 @@ void ES::Context::DoState(PointerWrap& p)
 {
   p.Do(uid);
   p.Do(gid);
-
-  title_import.tmd.DoState(p);
-  p.Do(title_import.content_id);
-  p.Do(title_import.content_buffer);
-
-  p.Do(title_export.valid);
-  title_export.tmd.DoState(p);
-  p.Do(title_export.title_key);
-  p.Do(title_export.contents);
+  title_import_export.DoState(p);
 
   p.Do(active);
   p.Do(ipc_fd);
@@ -321,34 +331,11 @@ void ES::DoState(PointerWrap& p)
 {
   Device::DoState(p);
   p.Do(s_content_file);
-  p.Do(m_AccessIdentID);
+  p.Do(m_content_table);
   s_title_context.DoState(p);
 
   for (auto& context : m_contexts)
     context.DoState(p);
-
-  u32 Count = (u32)(m_ContentAccessMap.size());
-  p.Do(Count);
-
-  if (p.GetMode() == PointerWrap::MODE_READ)
-  {
-    for (u32 i = 0; i < Count; i++)
-    {
-      u32 cfd = 0;
-      OpenedContent content;
-      p.Do(cfd);
-      p.Do(content);
-      cfd = OpenTitleContent(cfd, content.m_title_id, content.m_content.index);
-    }
-  }
-  else
-  {
-    for (const auto& pair : m_ContentAccessMap)
-    {
-      p.Do(pair.first);
-      p.Do(pair.second);
-    }
-  }
 }
 
 ES::ContextArray::iterator ES::FindActiveContext(s32 fd)
@@ -385,10 +372,6 @@ ReturnCode ES::Close(u32 fd)
   context->active = false;
   context->ipc_fd = -1;
 
-  // FIXME: IOS doesn't clear the content access map here.
-  m_ContentAccessMap.clear();
-  m_AccessIdentID = 0;
-
   INFO_LOG(IOS_ES, "ES: Close");
   m_is_active = false;
   // clear the NAND content cache to make sure nothing remains open.
@@ -422,17 +405,19 @@ IPCCommandResult ES::IOCtlV(const IOCtlVRequest& request)
   case IOCTL_ES_ADDTITLECANCEL:
     return ImportTitleCancel(*context, request);
   case IOCTL_ES_GETDEVICEID:
-    return GetConsoleID(request);
-  case IOCTL_ES_OPENTITLECONTENT:
-    return OpenTitleContent(context->uid, request);
+    return GetDeviceId(request);
+
   case IOCTL_ES_OPENCONTENT:
     return OpenContent(context->uid, request);
+  case IOCTL_ES_OPEN_ACTIVE_TITLE_CONTENT:
+    return OpenActiveTitleContent(context->uid, request);
   case IOCTL_ES_READCONTENT:
     return ReadContent(context->uid, request);
   case IOCTL_ES_CLOSECONTENT:
     return CloseContent(context->uid, request);
   case IOCTL_ES_SEEKCONTENT:
     return SeekContent(context->uid, request);
+
   case IOCTL_ES_GETTITLEDIR:
     return GetTitleDirectory(request);
   case IOCTL_ES_GETTITLEID:
@@ -850,30 +835,21 @@ ReturnCode ES::ReadCertStore(std::vector<u8>* buffer) const
 
 ReturnCode ES::WriteNewCertToStore(const IOS::ES::CertReader& cert)
 {
-  const std::string store_path = Common::RootUserPath(Common::FROM_SESSION_ROOT) + "/sys/cert.sys";
-  // The certificate store file may not exist, so we use a+b and not r+b here.
-  File::IOFile store_file{store_path, "a+b"};
-  if (!store_file)
-    return ES_EIO;
-
   // Read the current store to determine if the new cert needs to be written.
-  const u64 file_size = store_file.GetSize();
-  if (file_size != 0)
+  std::vector<u8> current_store;
+  const ReturnCode ret = ReadCertStore(&current_store);
+  if (ret == IPC_SUCCESS)
   {
-    std::vector<u8> certs_bytes(file_size);
-    if (!store_file.ReadBytes(certs_bytes.data(), certs_bytes.size()))
-      return ES_SHORT_READ;
-
-    const std::map<std::string, IOS::ES::CertReader> certs = IOS::ES::ParseCertChain(certs_bytes);
+    const std::map<std::string, IOS::ES::CertReader> certs = IOS::ES::ParseCertChain(current_store);
     // The cert is already present in the store. Nothing to do.
     if (certs.find(cert.GetName()) != certs.end())
       return IPC_SUCCESS;
   }
 
   // Otherwise, write the new cert at the end of the store.
-  // When opening a file in read-write mode, a seek is required before a write.
-  store_file.Seek(0, SEEK_END);
-  if (!store_file.WriteBytes(cert.GetBytes().data(), cert.GetBytes().size()))
+  const std::string store_path = Common::RootUserPath(Common::FROM_SESSION_ROOT) + "/sys/cert.sys";
+  File::IOFile store_file{store_path, "ab"};
+  if (!store_file || !store_file.WriteBytes(cert.GetBytes().data(), cert.GetBytes().size()))
     return ES_EIO;
   return IPC_SUCCESS;
 }

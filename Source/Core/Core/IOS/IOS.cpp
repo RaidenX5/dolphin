@@ -19,6 +19,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Core/Boot/DolReader.h"
+#include "Core/CommonTitles.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
@@ -173,17 +174,13 @@ void WriteReturnValue(s32 value, u32 address)
   Memory::Write_U32(static_cast<u32>(value), address);
 }
 
-// IOS used by the latest System Menu (4.3).
-constexpr u64 IOS80_TITLE_ID = 0x0000000100000050;
-constexpr u64 BC_TITLE_ID = 0x0000000100000100;
-constexpr u64 MIOS_TITLE_ID = 0x0000000100000101;
-
 Kernel::Kernel()
 {
   // Until the Wii root and NAND path stuff is entirely managed by IOS and made non-static,
   // using more than one IOS instance at a time is not supported.
   _assert_(GetIOS() == nullptr);
   Core::InitializeWiiRoot(false);
+  m_is_responsible_for_nand_root = true;
   AddCoreDevices();
 }
 
@@ -202,7 +199,8 @@ Kernel::~Kernel()
     m_device_map.clear();
   }
 
-  Core::ShutdownWiiRoot();
+  if (m_is_responsible_for_nand_root)
+    Core::ShutdownWiiRoot();
 }
 
 Kernel::Kernel(u64 title_id) : m_title_id(title_id)
@@ -216,9 +214,7 @@ EmulationKernel::EmulationKernel(u64 title_id) : Kernel(title_id)
   if (!SetupMemory(title_id, MemorySetupType::IOSReload))
     WARN_LOG(IOS, "No information about this IOS -- cannot set up memory values");
 
-  Core::InitializeWiiRoot(Core::WantsDeterminism());
-
-  if (title_id == MIOS_TITLE_ID)
+  if (title_id == Titles::MIOS)
   {
     MIOS::Load();
     return;
@@ -319,10 +315,10 @@ bool Kernel::BootIOS(const u64 ios_title_id)
   //
   // Because we currently don't have boot1 and boot2, and BC is only ever used to launch MIOS
   // (indirectly via boot2), we can just launch MIOS when BC is launched.
-  if (ios_title_id == BC_TITLE_ID)
+  if (ios_title_id == Titles::BC)
   {
     NOTICE_LOG(IOS, "BC: Launching MIOS...");
-    return BootIOS(MIOS_TITLE_ID);
+    return BootIOS(Titles::MIOS);
   }
 
   // Shut down the active IOS first before switching to the new one.
@@ -595,7 +591,7 @@ void Kernel::DoState(PointerWrap& p)
 
   m_iosc.DoState(p);
 
-  if (m_title_id == MIOS_TITLE_ID)
+  if (m_title_id == Titles::MIOS)
     return;
 
   // We need to make sure all file handles are closed so IOS::HLE::Device::FS::DoState can
@@ -686,13 +682,13 @@ void Init()
   });
 
   // Start with IOS80 to simulate part of the Wii boot process.
-  s_ios = std::make_unique<EmulationKernel>(IOS80_TITLE_ID);
+  s_ios = std::make_unique<EmulationKernel>(Titles::SYSTEM_MENU_IOS);
   // On a Wii, boot2 launches the system menu IOS, which then launches the system menu
   // (which bootstraps the PPC). Bootstrapping the PPC results in memory values being set up.
   // This means that the constants in the 0x3100 region are always set up by the time
   // a game is launched. This is necessary because booting games from the game list skips
   // a significant part of a Wii's boot process.
-  SetupMemory(IOS80_TITLE_ID, MemorySetupType::Full);
+  SetupMemory(Titles::SYSTEM_MENU_IOS, MemorySetupType::Full);
 }
 
 void Shutdown()

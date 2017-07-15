@@ -83,6 +83,7 @@ static_assert(sizeof(TMDHeader) == 0x1e4, "TMDHeader has the wrong size");
 struct Content
 {
   bool IsShared() const;
+  bool IsOptional() const;
   u32 id;
   u16 index;
   u16 type;
@@ -221,14 +222,18 @@ public:
 
   u32 GetDeviceId() const;
   u64 GetTitleId() const;
-  std::vector<u8> GetTitleKey() const;
+  // Get the decrypted title key.
+  std::array<u8, 16> GetTitleKey(const HLE::IOSC& iosc) const;
+  // Same as the above version, but guesses the console type depending on the issuer
+  // and constructs a temporary IOSC instance.
+  std::array<u8, 16> GetTitleKey() const;
 
   // Deletes a ticket with the given ticket ID from the internal buffer.
   void DeleteTicket(u64 ticket_id);
 
   // Decrypts the title key field for a "personalised" ticket -- one that is device-specific
   // and has a title key that must be decrypted first.
-  s32 Unpersonalise();
+  HLE::ReturnCode Unpersonalise(HLE::IOSC& iosc);
 };
 
 class SharedContentMap final

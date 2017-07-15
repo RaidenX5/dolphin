@@ -163,7 +163,7 @@ bool NANDContentLoader::Initialize(const std::string& name)
       return false;
     }
 
-    std::vector<u8> bytes(File::GetSize(tmd_filename));
+    std::vector<u8> bytes(tmd_file.GetSize());
     tmd_file.ReadBytes(bytes.data(), bytes.size());
     m_tmd.SetBytes(std::move(bytes));
 
@@ -186,7 +186,7 @@ void NANDContentLoader::InitializeContentEntries(const std::vector<u8>& data_app
   m_Content.resize(contents.size());
 
   u32 data_app_offset = 0;
-  const std::vector<u8> title_key = m_ticket.GetTitleKey();
+  const std::array<u8, 16> title_key = m_ticket.GetTitleKey();
   IOS::ES::SharedContentMap shared_content{m_root};
 
   for (size_t i = 0; i < contents.size(); ++i)

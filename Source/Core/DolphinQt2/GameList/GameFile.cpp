@@ -15,6 +15,7 @@
 #include "Core/HW/WiiSaveCrypted.h"
 #include "Core/IOS/ES/ES.h"
 #include "Core/IOS/IOS.h"
+#include "Core/WiiUtils.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Enums.h"
 #include "DiscIO/NANDContentLoader.h"
@@ -22,7 +23,6 @@
 #include "DolphinQt2/GameList/GameFile.h"
 #include "DolphinQt2/Resources.h"
 #include "DolphinQt2/Settings.h"
-#include "UICommon/WiiUtils.h"
 
 static const int CACHE_VERSION = 13;  // Last changed in PR #3261
 static const int DATASTREAM_VERSION = QDataStream::Qt_5_5;
@@ -215,11 +215,7 @@ QString GameFile::GetBannerString(const QMap<DiscIO::Language, QString>& m) cons
     return QString();
 
   bool wii = m_platform != DiscIO::Platform::GAMECUBE_DISC;
-  DiscIO::Language current_lang;
-  if (wii)
-    current_lang = Settings::Instance().GetWiiSystemLanguage();
-  else
-    current_lang = Settings::Instance().GetGCSystemLanguage();
+  DiscIO::Language current_lang = SConfig::GetInstance().GetCurrentLanguage(wii);
 
   if (m.contains(current_lang))
     return m[current_lang];
@@ -331,7 +327,12 @@ bool GameFile::Install()
 {
   _assert_(m_platform == DiscIO::Platform::WII_WAD);
 
-  return WiiUtils::InstallWAD(m_path.toStdString());
+  bool installed = WiiUtils::InstallWAD(m_path.toStdString());
+
+  if (installed)
+    Settings::Instance().NANDRefresh();
+
+  return installed;
 }
 
 bool GameFile::Uninstall()

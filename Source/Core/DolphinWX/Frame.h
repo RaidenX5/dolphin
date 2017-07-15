@@ -33,7 +33,7 @@
 struct BootParameters;
 
 // Class declarations
-class CGameListCtrl;
+class GameListCtrl;
 class CCodeWindow;
 class CConfigMain;
 class CLogWindow;
@@ -98,10 +98,11 @@ public:
 
   void DoStop();
   void UpdateGUI();
-  void UpdateGameList();
+  void GameListRefresh();
+  void GameListRescan(bool purge_cache = false);
   void ToggleLogWindow(bool bShow);
   void ToggleLogConfigWindow(bool bShow);
-  void StatusBarMessage(const char* Text, ...);
+  void StatusBarMessage(const char* format, ...);
   void ClearStatusBar();
   void BootGame(const std::string& filename);
   bool RendererHasFocus();
@@ -143,7 +144,7 @@ private:
     ADD_PANE_CENTER
   };
 
-  CGameListCtrl* m_game_list_ctrl = nullptr;
+  GameListCtrl* m_game_list_ctrl = nullptr;
   CConfigMain* m_main_config_dialog = nullptr;
   wxPanel* m_panel = nullptr;
   CRenderFrame* m_render_frame = nullptr;
@@ -252,7 +253,6 @@ private:
   void DoFullscreen(bool enable_fullscreen);
   void DoExclusiveFullscreen(bool enable_fullscreen);
   void ToggleDisplayMode(bool bFullscreen);
-  bool TriggerSTMPowerEvent();
   void OnStopped();
   void OnRenderWindowSizeRequest(int width, int height);
   void UpdateTitle(const wxString& str);
@@ -267,7 +267,8 @@ private:
   void OnHelp(wxCommandEvent& event);
 
   void OnReloadThemeBitmaps(wxCommandEvent& event);
-  void OnReloadGameList(wxCommandEvent& event);
+  void OnRefreshGameList(wxCommandEvent& event);
+  void OnRescanGameList(wxCommandEvent& event);
 
   void OnUpdateInterpreterMenuItem(wxUpdateUIEvent& event);
 
@@ -344,6 +345,7 @@ private:
   void OnUninstallWAD(wxCommandEvent& event);
   void OnImportBootMiiBackup(wxCommandEvent& event);
   void OnExtractCertificates(wxCommandEvent& event);
+  void OnPerformOnlineWiiUpdate(wxCommandEvent& event);
   void OnFifoPlayer(wxCommandEvent& event);
   void OnConnectWiimote(wxCommandEvent& event);
   void GameListChanged(wxCommandEvent& event);

@@ -34,6 +34,7 @@ public:
   bool Read(u64 _Offset, u64 _Length, u8* _pBuffer, const Partition& partition) const override;
   std::vector<Partition> GetPartitions() const override;
   Partition GetGamePartition() const override;
+  std::optional<u32> GetPartitionType(const Partition& partition) const override;
   std::optional<u64> GetTitleID(const Partition& partition) const override;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition) const override;
   const IOS::ES::TMDReader& GetTMD(const Partition& partition) const override;
@@ -63,10 +64,16 @@ public:
   static constexpr unsigned int BLOCK_TOTAL_SIZE = BLOCK_HEADER_SIZE + BLOCK_DATA_SIZE;
 
 private:
+  struct PartitionDetails
+  {
+    std::unique_ptr<mbedtls_aes_context> key;
+    IOS::ES::TicketReader ticket;
+    IOS::ES::TMDReader tmd;
+    u32 type;
+  };
+
   std::unique_ptr<BlobReader> m_pReader;
-  std::map<Partition, std::unique_ptr<mbedtls_aes_context>> m_partition_keys;
-  std::map<Partition, IOS::ES::TicketReader> m_partition_tickets;
-  std::map<Partition, IOS::ES::TMDReader> m_partition_tmds;
+  std::map<Partition, PartitionDetails> m_partitions;
   Partition m_game_partition;
 
   mutable u64 m_last_decrypted_block;

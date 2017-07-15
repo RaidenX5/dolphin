@@ -242,8 +242,8 @@ bool Init(std::unique_ptr<BootParameters> boot)
 
   Core::UpdateWantDeterminism(/*initial*/ true);
 
-  INFO_LOG(OSREPORT, "Starting core = %s mode", SConfig::GetInstance().bWii ? "Wii" : "GameCube");
-  INFO_LOG(OSREPORT, "CPU Thread separate = %s", SConfig::GetInstance().bCPUThread ? "Yes" : "No");
+  INFO_LOG(BOOT, "Starting core = %s mode", SConfig::GetInstance().bWii ? "Wii" : "GameCube");
+  INFO_LOG(BOOT, "CPU Thread separate = %s", SConfig::GetInstance().bCPUThread ? "Yes" : "No");
 
   Host_UpdateMainFrame();  // Disable any menus or buttons at boot
 
@@ -918,7 +918,7 @@ void UpdateTitle()
   // Update the audio timestretcher with the current speed
   if (g_sound_stream)
   {
-    CMixer* pMixer = g_sound_stream->GetMixer();
+    Mixer* pMixer = g_sound_stream->GetMixer();
     pMixer->UpdateSpeed((float)Speed / 100);
   }
 

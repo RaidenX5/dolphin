@@ -11,6 +11,7 @@
 
 #include "AudioCommon/AudioCommon.h"
 #include "Common/Thread.h"
+#include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/HotkeyManager.h"
 #include "Core/IOS/IOS.h"
@@ -159,20 +160,20 @@ void HotkeyScheduler::Run()
       if (IsHotkey(HK_EXIT))
         emit ExitHotkey();
 
+      auto& settings = Settings::Instance();
+
       // Volume
       if (IsHotkey(HK_VOLUME_DOWN))
-        AudioCommon::DecreaseVolume(3);
+        settings.DecreaseVolume(3);
 
       if (IsHotkey(HK_VOLUME_UP))
-        AudioCommon::IncreaseVolume(3);
+        settings.IncreaseVolume(3);
 
       if (IsHotkey(HK_VOLUME_TOGGLE_MUTE))
         AudioCommon::ToggleMuteVolume();
 
-      auto& settings = Settings::Instance();
-
       // Wiimote
-      if (settings.IsBluetoothPassthroughEnabled())
+      if (SConfig::GetInstance().m_bt_passthrough_enabled)
       {
         const auto ios = IOS::HLE::GetIOS();
         auto device = ios ? ios->GetDeviceByName("/dev/usb/oh1/57e/305") : nullptr;
@@ -184,7 +185,7 @@ void HotkeyScheduler::Run()
 
       // TODO Debugging shortcuts (Separate PR)
 
-      if (settings.IsWiiGameRunning())
+      if (SConfig::GetInstance().bWii)
       {
         int wiimote_id = -1;
         if (IsHotkey(HK_WIIMOTE1_CONNECT))
@@ -224,16 +225,16 @@ void HotkeyScheduler::Run()
 
       if (IsHotkey(HK_DECREASE_EMULATION_SPEED))
       {
-        auto speed = settings.GetEmulationSpeed() - 0.1;
+        auto speed = SConfig::GetInstance().m_EmulationSpeed - 0.1;
         speed = (speed <= 0 || (speed >= 0.95 && speed <= 1.05)) ? 1.0 : speed;
-        settings.SetEmulationSpeed(speed);
+        SConfig::GetInstance().m_EmulationSpeed = speed;
       }
 
       if (IsHotkey(HK_INCREASE_EMULATION_SPEED))
       {
-        auto speed = settings.GetEmulationSpeed() + 0.1;
+        auto speed = SConfig::GetInstance().m_EmulationSpeed + 0.1;
         speed = (speed >= 0.95 && speed <= 1.05) ? 1.0 : speed;
-        settings.SetEmulationSpeed(speed);
+        SConfig::GetInstance().m_EmulationSpeed = speed;
       }
 
       // Slot Saving / Loading

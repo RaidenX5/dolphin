@@ -9,6 +9,10 @@
 #include <QMessageBox>
 #include <QUrl>
 
+#include "Core/CommonTitles.h"
+#include "Core/ConfigManager.h"
+#include "Core/IOS/ES/ES.h"
+#include "Core/IOS/IOS.h"
 #include "Core/State.h"
 #include "DolphinQt2/AboutDialog.h"
 #include "DolphinQt2/GameList/GameFile.h"
@@ -43,6 +47,7 @@ void MenuBar::EmulationStarted()
   m_state_load_menu->setEnabled(true);
   m_state_save_menu->setEnabled(true);
   UpdateStateSlotMenu();
+  UpdateToolsMenu(true);
 }
 void MenuBar::EmulationPaused()
 {
@@ -66,6 +71,7 @@ void MenuBar::EmulationStopped()
   m_state_load_menu->setEnabled(false);
   m_state_save_menu->setEnabled(false);
   UpdateStateSlotMenu();
+  UpdateToolsMenu(false);
 }
 
 void MenuBar::AddFileMenu()
@@ -79,6 +85,23 @@ void MenuBar::AddToolsMenu()
 {
   QMenu* tools_menu = addMenu(tr("Tools"));
   m_wad_install_action = tools_menu->addAction(tr("Install WAD..."), this, SLOT(InstallWAD()));
+
+  // Label will be set by a NANDRefresh later
+  m_boot_sysmenu = tools_menu->addAction(QStringLiteral(""), [this] { emit BootWiiSystemMenu(); });
+  m_boot_sysmenu->setEnabled(false);
+
+  connect(&Settings::Instance(), &Settings::NANDRefresh, [this] { UpdateToolsMenu(false); });
+
+  m_perform_online_update_menu = tools_menu->addMenu(tr("Perform Online System Update"));
+  m_perform_online_update_for_current_region = m_perform_online_update_menu->addAction(
+      tr("Current Region"), [this] { emit PerformOnlineUpdate(""); });
+  m_perform_online_update_menu->addSeparator();
+  m_perform_online_update_menu->addAction(tr("Europe"),
+                                          [this] { emit PerformOnlineUpdate("EUR"); });
+  m_perform_online_update_menu->addAction(tr("Japan"), [this] { emit PerformOnlineUpdate("JPN"); });
+  m_perform_online_update_menu->addAction(tr("Korea"), [this] { emit PerformOnlineUpdate("KOR"); });
+  m_perform_online_update_menu->addAction(tr("United States"),
+                                          [this] { emit PerformOnlineUpdate("USA"); });
 }
 
 void MenuBar::AddEmulationMenu()
@@ -219,16 +242,16 @@ void MenuBar::AddGameListTypeSection(QMenu* view_menu)
 
 void MenuBar::AddTableColumnsMenu(QMenu* view_menu)
 {
-  auto& settings = Settings::Instance();
-  static const QMap<QString, bool*> columns{{tr("Platform"), &settings.PlatformVisible()},
-                                            {tr("ID"), &settings.IDVisible()},
-                                            {tr("Banner"), &settings.BannerVisible()},
-                                            {tr("Title"), &settings.TitleVisible()},
-                                            {tr("Description"), &settings.DescriptionVisible()},
-                                            {tr("Maker"), &settings.MakerVisible()},
-                                            {tr("Size"), &settings.SizeVisible()},
-                                            {tr("Country"), &settings.CountryVisible()},
-                                            {tr("Quality"), &settings.StateVisible()}};
+  static const QMap<QString, bool*> columns{
+      {tr("Platform"), &SConfig::GetInstance().m_showSystemColumn},
+      {tr("ID"), &SConfig::GetInstance().m_showIDColumn},
+      {tr("Banner"), &SConfig::GetInstance().m_showBannerColumn},
+      {tr("Title"), &SConfig::GetInstance().m_showTitleColumn},
+      {tr("Description"), &SConfig::GetInstance().m_showDescriptionColumn},
+      {tr("Maker"), &SConfig::GetInstance().m_showMakerColumn},
+      {tr("Size"), &SConfig::GetInstance().m_showSizeColumn},
+      {tr("Country"), &SConfig::GetInstance().m_showRegionColumn},
+      {tr("Quality"), &SConfig::GetInstance().m_showStateColumn}};
 
   QActionGroup* column_group = new QActionGroup(this);
   QMenu* cols_menu = view_menu->addMenu(tr("Table Columns"));
@@ -242,9 +265,32 @@ void MenuBar::AddTableColumnsMenu(QMenu* view_menu)
     action->setChecked(*config);
     connect(action, &QAction::toggled, [this, config, key](bool value) {
       *config = value;
-      Settings::Instance().Save();
       emit ColumnVisibilityToggled(key, value);
     });
+  }
+}
+
+void MenuBar::UpdateToolsMenu(bool emulation_started)
+{
+  m_boot_sysmenu->setEnabled(!emulation_started);
+  m_perform_online_update_menu->setEnabled(!emulation_started);
+
+  if (!emulation_started)
+  {
+    IOS::HLE::Kernel ios;
+    const auto tmd = ios.GetES()->FindInstalledTMD(Titles::SYSTEM_MENU);
+
+    const QString sysmenu_version =
+        tmd.IsValid() ?
+            QString::fromStdString(DiscIO::GetSysMenuVersionString(tmd.GetTitleVersion())) :
+            QStringLiteral("");
+    m_boot_sysmenu->setText(tr("Load Wii System Menu %1").arg(sysmenu_version));
+
+    m_boot_sysmenu->setEnabled(tmd.IsValid());
+
+    for (QAction* action : m_perform_online_update_menu->actions())
+      action->setEnabled(!tmd.IsValid());
+    m_perform_online_update_for_current_region->setEnabled(tmd.IsValid());
   }
 }
 

@@ -26,6 +26,7 @@
 
 #include "Core/Analytics.h"
 #include "Core/Boot/Boot.h"
+#include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/Core.h"
 #include "Core/FifoPlayer/FifoDataFile.h"
 #include "Core/HLE/HLE.h"
@@ -168,6 +169,8 @@ void SConfig::SaveInterfaceSettings(IniFile& ini)
   interface->Set("ShowLogConfigWindow", m_InterfaceLogConfigWindow);
   interface->Set("ExtendedFPSInfo", m_InterfaceExtendedFPSInfo);
   interface->Set("ShowActiveTitle", m_show_active_title);
+  interface->Set("UseBuiltinTitleDatabase", m_use_builtin_title_database);
+  interface->Set("ShowDevelopmentWarning", m_show_development_warning);
   interface->Set("ThemeName", theme_name);
   interface->Set("PauseOnFocusLost", m_PauseOnFocusLost);
   interface->Set("DisableTooltips", m_DisableTooltips);
@@ -254,7 +257,7 @@ void SConfig::SaveCoreSettings(IniFile& ini)
   core->Set("SelectedLanguage", SelectedLanguage);
   core->Set("OverrideGCLang", bOverrideGCLanguage);
   core->Set("DPL2Decoder", bDPL2Decoder);
-  core->Set("Latency", iLatency);
+  core->Set("AudioLatency", iLatency);
   core->Set("AudioStretch", m_audio_stretch);
   core->Set("AudioStretchMaxLatency", m_audio_stretch_max_latency);
   core->Set("MemcardAPath", m_strMemoryCardA);
@@ -480,6 +483,8 @@ void SConfig::LoadInterfaceSettings(IniFile& ini)
   interface->Get("ShowLogConfigWindow", &m_InterfaceLogConfigWindow, false);
   interface->Get("ExtendedFPSInfo", &m_InterfaceExtendedFPSInfo, false);
   interface->Get("ShowActiveTitle", &m_show_active_title, true);
+  interface->Get("UseBuiltinTitleDatabase", &m_use_builtin_title_database, true);
+  interface->Get("ShowDevelopmentWarning", &m_show_development_warning, true);
   interface->Get("ThemeName", &theme_name, DEFAULT_THEME_DIR);
   interface->Get("PauseOnFocusLost", &m_PauseOnFocusLost, false);
   interface->Get("DisableTooltips", &m_DisableTooltips, false);
@@ -568,7 +573,7 @@ void SConfig::LoadCoreSettings(IniFile& ini)
   core->Get("SelectedLanguage", &SelectedLanguage, 0);
   core->Get("OverrideGCLang", &bOverrideGCLanguage, false);
   core->Get("DPL2Decoder", &bDPL2Decoder, false);
-  core->Get("Latency", &iLatency, 5);
+  core->Get("AudioLatency", &iLatency, 20);
   core->Get("AudioStretch", &m_audio_stretch, false);
   core->Get("AudioStretchMaxLatency", &m_audio_stretch_max_latency, 80);
   core->Get("MemcardAPath", &m_strMemoryCardA);
@@ -831,7 +836,7 @@ void SConfig::LoadDefaults()
   bOverrideGCLanguage = false;
   bWii = false;
   bDPL2Decoder = false;
-  iLatency = 14;
+  iLatency = 20;
   m_audio_stretch = false;
   m_audio_stretch_max_latency = 80;
 
@@ -1078,7 +1083,7 @@ IniFile SConfig::LoadGameIni() const
 IniFile SConfig::LoadDefaultGameIni(const std::string& id, std::optional<u16> revision)
 {
   IniFile game_ini;
-  for (const std::string& filename : GetGameIniFilenames(id, revision))
+  for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))
     game_ini.Load(File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + filename, true);
   return game_ini;
 }
@@ -1086,7 +1091,7 @@ IniFile SConfig::LoadDefaultGameIni(const std::string& id, std::optional<u16> re
 IniFile SConfig::LoadLocalGameIni(const std::string& id, std::optional<u16> revision)
 {
   IniFile game_ini;
-  for (const std::string& filename : GetGameIniFilenames(id, revision))
+  for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))
     game_ini.Load(File::GetUserPath(D_GAMESETTINGS_IDX) + filename, true);
   return game_ini;
 }
@@ -1094,35 +1099,9 @@ IniFile SConfig::LoadLocalGameIni(const std::string& id, std::optional<u16> revi
 IniFile SConfig::LoadGameIni(const std::string& id, std::optional<u16> revision)
 {
   IniFile game_ini;
-  for (const std::string& filename : GetGameIniFilenames(id, revision))
+  for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))
     game_ini.Load(File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + filename, true);
-  for (const std::string& filename : GetGameIniFilenames(id, revision))
+  for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))
     game_ini.Load(File::GetUserPath(D_GAMESETTINGS_IDX) + filename, true);
   return game_ini;
-}
-
-// Returns all possible filenames in ascending order of priority
-std::vector<std::string> SConfig::GetGameIniFilenames(const std::string& id,
-                                                      std::optional<u16> revision)
-{
-  std::vector<std::string> filenames;
-
-  if (id.empty())
-    return filenames;
-
-  // INIs that match the system code (unique for each Virtual Console system)
-  filenames.push_back(id.substr(0, 1) + ".ini");
-
-  // INIs that match all regions
-  if (id.size() >= 4)
-    filenames.push_back(id.substr(0, 3) + ".ini");
-
-  // Regular INIs
-  filenames.push_back(id + ".ini");
-
-  // INIs with specific revisions
-  if (revision)
-    filenames.push_back(id + StringFromFormat("r%d", *revision) + ".ini");
-
-  return filenames;
 }

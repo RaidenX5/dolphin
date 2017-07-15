@@ -55,6 +55,7 @@
 #include "DolphinWX/Input/GuitarInputConfigDiag.h"
 #include "DolphinWX/Input/NunchukInputConfigDiag.h"
 #include "DolphinWX/Input/TurntableInputConfigDiag.h"
+#include "DolphinWX/UINeedsControllerState.h"
 #include "DolphinWX/WxUtils.h"
 
 #include "InputCommon/ControlReference/ControlReference.h"
@@ -264,7 +265,7 @@ void InputConfigDialog::UpdateProfileComboBox()
   pname += PROFILES_PATH;
   pname += m_config.GetProfileName();
 
-  std::vector<std::string> sv = Common::DoFileSearch({".ini"}, {pname});
+  std::vector<std::string> sv = Common::DoFileSearch({pname}, {".ini"});
 
   wxArrayString strs;
   for (const std::string& filename : sv)
@@ -856,11 +857,9 @@ void InputConfigDialog::LoadProfile(wxCommandEvent&)
   std::string fname;
   InputConfigDialog::GetProfilePath(fname);
 
-  if (!File::Exists(fname))
-    return;
-
   IniFile inifile;
-  inifile.Load(fname);
+  if (!inifile.Load(fname))
+    return;
 
   controller->LoadConfig(inifile.GetOrCreateSection("Profile"));
   controller->UpdateReferences(g_controller_interface);
@@ -1261,6 +1260,7 @@ InputConfigDialog::InputConfigDialog(wxWindow* const parent, InputConfig& config
 {
   Bind(wxEVT_CLOSE_WINDOW, &InputConfigDialog::OnClose, this);
   Bind(wxEVT_BUTTON, &InputConfigDialog::OnCloseButton, this, wxID_CLOSE);
+  Bind(wxEVT_ACTIVATE, &InputConfigDialog::OnActivate, this);
 
   SetLayoutAdaptationMode(wxDIALOG_ADAPTATION_MODE_ENABLED);
   SetLayoutAdaptationLevel(wxDIALOG_ADAPTATION_STANDARD_SIZER);
@@ -1269,6 +1269,12 @@ InputConfigDialog::InputConfigDialog(wxWindow* const parent, InputConfig& config
   m_update_timer.SetOwner(this);
   Bind(wxEVT_TIMER, &InputConfigDialog::UpdateBitmaps, this);
   m_update_timer.Start(PREVIEW_UPDATE_TIME, wxTIMER_CONTINUOUS);
+}
+
+void InputConfigDialog::OnActivate(wxActivateEvent& event)
+{
+  // Needed for input bitmaps
+  SetUINeedsControllerState(event.GetActive());
 }
 
 InputEventFilter::InputEventFilter()

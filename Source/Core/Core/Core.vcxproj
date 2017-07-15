@@ -290,6 +290,7 @@
     <ClCompile Include="State.cpp" />
     <ClCompile Include="TitleDatabase.cpp" />
     <ClCompile Include="WiiRoot.cpp" />
+    <ClCompile Include="WiiUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ActionReplay.h" />
@@ -521,8 +522,10 @@
     <ClInclude Include="PowerPC\PPCTables.h" />
     <ClInclude Include="PowerPC\Profiler.h" />
     <ClInclude Include="State.h" />
+    <ClInclude Include="Titles.h" />
     <ClInclude Include="TitleDatabase.h" />
     <ClInclude Include="WiiRoot.h" />
+    <ClInclude Include="WiiUtils.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="CMakeLists.txt" />

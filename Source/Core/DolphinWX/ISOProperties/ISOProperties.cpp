@@ -4,6 +4,7 @@
 
 #include "DolphinWX/ISOProperties/ISOProperties.h"
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdio>
@@ -39,6 +40,7 @@
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
+#include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/GeckoCodeConfig.h"
@@ -430,7 +432,7 @@ void CISOProperties::CreateGUIControls()
   gecko_layout->Add(m_geckocode_panel, 1, wxEXPAND);
   gecko_cheat_page->SetSizer(gecko_layout);
 
-  if (m_open_iso->GetVolumeType() != DiscIO::Platform::WII_WAD)
+  if (DiscIO::IsDisc(m_open_iso->GetVolumeType()))
   {
     m_Notebook->AddPage(new FilesystemPanel(m_Notebook, ID_FILESYSTEM, m_open_iso),
                         _("Filesystem"));
@@ -442,16 +444,12 @@ void CISOProperties::CreateGUIControls()
   sButtons->GetAffirmativeButton()->SetLabel(_("Close"));
 
   // If there is no default gameini, disable the button.
-  bool game_ini_exists = false;
-  for (const std::string& ini_filename :
-       SConfig::GetGameIniFilenames(game_id, m_open_iso->GetRevision()))
-  {
-    if (File::Exists(File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + ini_filename))
-    {
-      game_ini_exists = true;
-      break;
-    }
-  }
+  const std::vector<std::string> ini_names =
+      ConfigLoaders::GetGameIniFilenames(game_id, m_open_iso->GetRevision());
+  const bool game_ini_exists =
+      std::any_of(ini_names.cbegin(), ini_names.cend(), [](const std::string& name) {
+        return File::Exists(File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + name);
+      });
   if (!game_ini_exists)
     EditConfigDefault->Disable();
 
@@ -755,7 +753,7 @@ void CISOProperties::OnChangeTitle(wxCommandEvent& event)
 void CISOProperties::OnShowDefaultConfig(wxCommandEvent& WXUNUSED(event))
 {
   for (const std::string& filename :
-       SConfig::GetGameIniFilenames(game_id, m_open_iso->GetRevision()))
+       ConfigLoaders::GetGameIniFilenames(game_id, m_open_iso->GetRevision()))
   {
     std::string path = File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + filename;
     if (File::Exists(path))

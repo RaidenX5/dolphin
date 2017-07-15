@@ -24,6 +24,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Common/Swap.h"
+#include "Core/CommonTitles.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/IOSC.h"
@@ -47,7 +48,7 @@ bool IsDiscTitle(u64 title_id)
 
 bool IsChannel(u64 title_id)
 {
-  if (title_id == TITLEID_SYSMENU)
+  if (title_id == Titles::SYSTEM_MENU)
     return true;
 
   return IsTitleType(title_id, TitleType::Channel) ||
@@ -59,6 +60,11 @@ bool IsChannel(u64 title_id)
 bool Content::IsShared() const
 {
   return (type & 0x8000) != 0;
+}
+
+bool Content::IsOptional() const
+{
+  return (type & 0x4000) != 0;
 }
 
 SignedBlobReader::SignedBlobReader(const std::vector<u8>& bytes) : m_bytes(bytes)
@@ -228,7 +234,7 @@ u64 TMDReader::GetIOSId() const
 
 DiscIO::Region TMDReader::GetRegion() const
 {
-  if (GetTitleId() == 0x0000000100000002)
+  if (GetTitleId() == Titles::SYSTEM_MENU)
     return DiscIO::GetSysMenuRegion(GetTitleVersion());
 
   return DiscIO::RegionSwitchWii(static_cast<u8>(GetTitleId() & 0xff));
@@ -374,7 +380,7 @@ u64 TicketReader::GetTitleId() const
   return Common::swap64(m_bytes.data() + offsetof(Ticket, title_id));
 }
 
-std::vector<u8> TicketReader::GetTitleKey() const
+std::array<u8, 16> TicketReader::GetTitleKey(const HLE::IOSC& iosc) const
 {
   u8 iv[16] = {};
   std::copy_n(&m_bytes[offsetof(Ticket, title_id)], sizeof(Ticket::title_id), iv);
@@ -388,15 +394,18 @@ std::vector<u8> TicketReader::GetTitleKey() const
              GetTitleId(), index);
   }
 
-  const bool is_rvt = (GetIssuer() == "Root-CA00000002-XS00000006");
-  const HLE::IOSC::ConsoleType console_type =
-      is_rvt ? HLE::IOSC::ConsoleType::RVT : HLE::IOSC::ConsoleType::Retail;
-
-  std::vector<u8> key(16);
-  HLE::IOSC iosc(console_type);
+  std::array<u8, 16> key;
   iosc.Decrypt(common_key_handle, iv, &m_bytes[offsetof(Ticket, title_key)], 16, key.data(),
                HLE::PID_ES);
   return key;
+}
+
+std::array<u8, 16> TicketReader::GetTitleKey() const
+{
+  const bool is_rvt = (GetIssuer() == "Root-CA00000002-XS00000006");
+  const HLE::IOSC::ConsoleType console_type =
+      is_rvt ? HLE::IOSC::ConsoleType::RVT : HLE::IOSC::ConsoleType::Retail;
+  return GetTitleKey(HLE::IOSC{console_type});
 }
 
 void TicketReader::DeleteTicket(u64 ticket_id_to_delete)
@@ -414,16 +423,16 @@ void TicketReader::DeleteTicket(u64 ticket_id_to_delete)
   m_bytes = std::move(new_ticket);
 }
 
-s32 TicketReader::Unpersonalise()
+HLE::ReturnCode TicketReader::Unpersonalise(HLE::IOSC& iosc)
 {
   const auto ticket_begin = m_bytes.begin();
 
   // IOS uses IOSC to compute an AES key from the peer public key and the device's private ECC key,
   // which is used the decrypt the title key. The IV is the ticket ID (8 bytes), zero extended.
   using namespace HLE;
-  IOSC iosc;
   IOSC::Handle public_handle;
-  s32 ret = iosc.CreateObject(&public_handle, IOSC::TYPE_PUBLIC_KEY, IOSC::SUBTYPE_ECC233, PID_ES);
+  ReturnCode ret =
+      iosc.CreateObject(&public_handle, IOSC::TYPE_PUBLIC_KEY, IOSC::SUBTYPE_ECC233, PID_ES);
   if (ret != IPC_SUCCESS)
     return ret;
 
@@ -572,7 +581,7 @@ UIDSys::UIDSys(Common::FromWhichRoot root)
 
   if (m_entries.empty())
   {
-    GetOrInsertUIDForTitle(TITLEID_SYSMENU);
+    GetOrInsertUIDForTitle(Titles::SYSTEM_MENU);
   }
 }
 

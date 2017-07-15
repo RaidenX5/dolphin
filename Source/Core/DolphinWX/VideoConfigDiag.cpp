@@ -32,6 +32,7 @@
 #include "DolphinWX/Main.h"
 #include "DolphinWX/PostProcessingConfigDiag.h"
 #include "DolphinWX/WxUtils.h"
+#include "UICommon/VideoUtils.h"
 #include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
@@ -276,8 +277,9 @@ static wxString cache_efb_copies_desc =
 static wxString stereo_3d_desc =
     wxTRANSLATE("Selects the stereoscopic 3D mode. Stereoscopy allows you to get a better feeling "
                 "of depth if you have the necessary hardware.\nSide-by-Side and Top-and-Bottom are "
-                "used by most 3D TVs.\nAnaglyph is used for Red-Cyan colored glasses.\nHeavily "
-                "decreases emulation speed and sometimes causes issues.\n\nIf unsure, select Off.");
+                "used by most 3D TVs.\nAnaglyph is used for Red-Cyan colored glasses.\nHDMI 3D is "
+                "used when your monitor supports 3D display resolutions.\nHeavily decreases "
+                "emulation speed and sometimes causes issues.\n\nIf unsure, select Off.");
 static wxString stereo_depth_desc =
     wxTRANSLATE("Controls the separation distance between the virtual cameras.\nA higher value "
                 "creates a stronger feeling of depth while a lower value is more comfortable.");
@@ -306,69 +308,6 @@ static wxString gpu_texture_decoding_desc =
     wxTRANSLATE("Enables texture decoding using the GPU instead of the CPU. This may result in "
                 "performance gains in some scenarios, or on systems where the CPU is the "
                 "bottleneck.\n\nIf unsure, leave this unchecked.");
-
-#if !defined(__APPLE__)
-// Search for available resolutions - TODO: Move to Common?
-static wxArrayString GetListOfResolutions()
-{
-  wxArrayString retlist;
-  retlist.Add(_("Auto"));
-#ifdef _WIN32
-  DWORD iModeNum = 0;
-  DEVMODE dmi;
-  ZeroMemory(&dmi, sizeof(dmi));
-  dmi.dmSize = sizeof(dmi);
-  std::vector<std::string> resos;
-
-  while (EnumDisplaySettings(nullptr, iModeNum++, &dmi) != 0)
-  {
-    char res[100];
-    sprintf(res, "%dx%d", dmi.dmPelsWidth, dmi.dmPelsHeight);
-    std::string strRes(res);
-    // Only add unique resolutions
-    if (std::find(resos.begin(), resos.end(), strRes) == resos.end())
-    {
-      resos.push_back(strRes);
-      retlist.Add(StrToWxStr(res));
-    }
-    ZeroMemory(&dmi, sizeof(dmi));
-  }
-#elif defined(HAVE_XRANDR) && HAVE_XRANDR
-  std::vector<std::string> resos;
-  main_frame->m_xrr_config->AddResolutions(resos);
-  for (auto res : resos)
-    retlist.Add(StrToWxStr(res));
-#elif defined(__APPLE__)
-  CFArrayRef modes = CGDisplayCopyAllDisplayModes(CGMainDisplayID(), nullptr);
-  for (CFIndex i = 0; i < CFArrayGetCount(modes); i++)
-  {
-    std::stringstream res;
-    CGDisplayModeRef mode;
-    CFStringRef encoding;
-    size_t w, h;
-    bool is32;
-
-    mode = (CGDisplayModeRef)CFArrayGetValueAtIndex(modes, i);
-    w = CGDisplayModeGetWidth(mode);
-    h = CGDisplayModeGetHeight(mode);
-    encoding = CGDisplayModeCopyPixelEncoding(mode);
-    is32 = CFEqual(encoding, CFSTR(IO32BitDirectPixels));
-    CFRelease(encoding);
-
-    if (!is32)
-      continue;
-    if (CGDisplayModeGetIOFlags(mode) & kDisplayModeStretchedFlag)
-      continue;
-
-    res << w << "x" << h;
-
-    retlist.Add(res.str());
-  }
-  CFRelease(modes);
-#endif
-  return retlist;
-}
-#endif
 
 VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
     : wxDialog(parent, wxID_ANY, wxString::Format(_("Dolphin %s Graphics Configuration"),
@@ -436,7 +375,17 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
 #if !defined(__APPLE__)
         // display resolution
         {
-          wxArrayString res_list = GetListOfResolutions();
+          wxArrayString res_list;
+          res_list.Add(_("Auto"));
+#if defined(HAVE_XRANDR) && HAVE_XRANDR
+          const auto resolutions = VideoUtils::GetAvailableResolutions(main_frame->m_xrr_config);
+#else
+          const auto resolutions = VideoUtils::GetAvailableResolutions(nullptr);
+#endif
+
+          for (const auto& res : resolutions)
+            res_list.Add(res);
+
           if (res_list.empty())
             res_list.Add(_("<No resolutions found>"));
           label_display_resolution =
@@ -674,8 +623,8 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
       szr_stereo->Add(new wxStaticText(page_enh, wxID_ANY, _("Stereoscopic 3D Mode:")), 0,
                       wxALIGN_CENTER_VERTICAL);
 
-      const wxString stereo_choices[] = {_("Off"), _("Side-by-Side"), _("Top-and-Bottom"),
-                                         _("Anaglyph"), _("Nvidia 3D Vision")};
+      const wxString stereo_choices[] = {_("Off"),      _("Side-by-Side"), _("Top-and-Bottom"),
+                                         _("Anaglyph"), _("HDMI 3D"),      _("Nvidia 3D Vision")};
       wxChoice* stereo_choice =
           CreateChoice(page_enh, Config::GFX_STEREO_MODE, wxGetTranslation(stereo_3d_desc),
                        vconfig.backend_info.bSupports3DVision ? ArraySize(stereo_choices) :

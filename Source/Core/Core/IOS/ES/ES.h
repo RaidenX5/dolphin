@@ -55,33 +55,21 @@ public:
   ReturnCode Close(u32 fd) override;
   IPCCommandResult IOCtlV(const IOCtlVRequest& request) override;
 
-  struct OpenedContent
+  struct TitleImportExportContext
   {
-    u64 m_title_id;
-    IOS::ES::Content m_content;
-    u32 m_position;
-  };
-
-  struct TitleImportContext
-  {
-    IOS::ES::TMDReader tmd;
-    u32 content_id = 0xFFFFFFFF;
-    std::vector<u8> content_buffer;
-  };
-
-  // TODO: merge this with TitleImportContext. Also reuse the global content table.
-  struct TitleExportContext
-  {
-    struct ExportContent
-    {
-      OpenedContent content;
-      std::array<u8, 16> iv{};
-    };
+    void DoState(PointerWrap& p);
 
     bool valid = false;
     IOS::ES::TMDReader tmd;
-    std::vector<u8> title_key;
-    std::map<u32, ExportContent> contents;
+    std::array<u8, 16> key{};
+    struct ContentContext
+    {
+      bool valid = false;
+      u32 id = 0;
+      std::array<u8, 16> iv{};
+      std::vector<u8> buffer;
+    };
+    ContentContext content;
   };
 
   struct Context
@@ -90,8 +78,7 @@ public:
 
     u16 gid = 0;
     u32 uid = 0;
-    TitleImportContext title_import;
-    TitleExportContext title_export;
+    TitleImportExportContext title_import_export;
     bool active = false;
     // We use this to associate an IPC fd with an ES context.
     s32 ipc_fd = -1;
@@ -110,6 +97,12 @@ public:
   std::vector<IOS::ES::Content> GetStoredContentsFromTMD(const IOS::ES::TMDReader& tmd) const;
   u32 GetSharedContentsCount() const;
   std::vector<std::array<u8, 20>> GetSharedContents() const;
+
+  // Title contents
+  s32 OpenContent(const IOS::ES::TMDReader& tmd, u16 content_index, u32 uid);
+  ReturnCode CloseContent(u32 cfd, u32 uid);
+  s32 ReadContent(u32 cfd, u8* buffer, u32 size, u32 uid);
+  s32 SeekContent(u32 cfd, u32 offset, SeekMode mode, u32 uid);
 
   // Title management
   ReturnCode ImportTicket(const std::vector<u8>& ticket_bytes, const std::vector<u8>& cert_chain);
@@ -132,6 +125,8 @@ public:
   ReturnCode DeleteSharedContent(const std::array<u8, 20>& sha1) const;
   ReturnCode DeleteContent(u64 title_id, u32 content_id) const;
 
+  ReturnCode GetDeviceId(u32* device_id) const;
+
   // Views
   ReturnCode GetV0TicketFromView(const u8* ticket_view, u8* ticket) const;
   ReturnCode GetTicketFromView(const u8* ticket_view, u8* ticket, u32* ticket_size) const;
@@ -150,7 +145,7 @@ private:
     IOCTL_ES_ADDTITLEFINISH = 0x06,
     IOCTL_ES_GETDEVICEID = 0x07,
     IOCTL_ES_LAUNCH = 0x08,
-    IOCTL_ES_OPENCONTENT = 0x09,
+    IOCTL_ES_OPEN_ACTIVE_TITLE_CONTENT = 0x09,
     IOCTL_ES_READCONTENT = 0x0A,
     IOCTL_ES_CLOSECONTENT = 0x0B,
     IOCTL_ES_GETOWNEDTITLECNT = 0x0C,
@@ -177,7 +172,7 @@ private:
     IOCTL_ES_SETUID = 0x21,
     IOCTL_ES_DELETETITLECONTENT = 0x22,
     IOCTL_ES_SEEKCONTENT = 0x23,
-    IOCTL_ES_OPENTITLECONTENT = 0x24,
+    IOCTL_ES_OPENCONTENT = 0x24,
     IOCTL_ES_LAUNCHBC = 0x25,
     IOCTL_ES_EXPORTTITLEINIT = 0x26,
     IOCTL_ES_EXPORTCONTENTBEGIN = 0x27,
@@ -237,7 +232,7 @@ private:
   IPCCommandResult DeleteContent(const IOCtlVRequest& request);
 
   // Device identity and encryption
-  IPCCommandResult GetConsoleID(const IOCtlVRequest& request);
+  IPCCommandResult GetDeviceId(const IOCtlVRequest& request);
   IPCCommandResult GetDeviceCertificate(const IOCtlVRequest& request);
   IPCCommandResult CheckKoreaRegion(const IOCtlVRequest& request);
   IPCCommandResult Sign(const IOCtlVRequest& request);
@@ -256,7 +251,7 @@ private:
   IPCCommandResult DeleteStreamKey(const IOCtlVRequest& request);
 
   // Title contents
-  IPCCommandResult OpenTitleContent(u32 uid, const IOCtlVRequest& request);
+  IPCCommandResult OpenActiveTitleContent(u32 uid, const IOCtlVRequest& request);
   IPCCommandResult OpenContent(u32 uid, const IOCtlVRequest& request);
   IPCCommandResult ReadContent(u32 uid, const IOCtlVRequest& request);
   IPCCommandResult CloseContent(u32 uid, const IOCtlVRequest& request);
@@ -338,12 +333,18 @@ private:
 
   static const DiscIO::NANDContentLoader& AccessContentDevice(u64 title_id);
 
-  u32 OpenTitleContent(u32 CFD, u64 TitleID, u16 Index);
+  // TODO: reuse the FS code.
+  struct OpenedContent
+  {
+    bool m_opened = false;
+    u64 m_title_id = 0;
+    IOS::ES::Content m_content;
+    u32 m_position = 0;
+    u32 m_uid = 0;
+  };
 
-  using ContentAccessMap = std::map<u32, OpenedContent>;
-  ContentAccessMap m_ContentAccessMap;
-
-  u32 m_AccessIdentID = 0;
+  using ContentTable = std::array<OpenedContent, 16>;
+  ContentTable m_content_table;
 
   ContextArray m_contexts;
 };
