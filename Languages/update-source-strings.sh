@@ -1,21 +1,16 @@
 #!/bin/bash
 
-cd ${0/gettextize/}/..
+# This script updates the dolphin-emu.pot file to match the strings in
+# the source code.
+
+cd "$(dirname "$0")/.."
 SRCDIR=Source
 find $SRCDIR -name '*.cpp' -o -name '*.h' -o -name '*.c' | \
 	xgettext -d dolphin-emu -s --keyword=_ --keyword=wxTRANSLATE --keyword=SuccessAlertT \
 	--keyword=PanicAlertT --keyword=PanicYesNoT --keyword=AskYesNoT --keyword=CriticalAlertT \
-	--keyword=GetStringT --keyword=_trans --add-comments=i18n -p ./Languages/po \
-	-o dolphin-emu.pot -f - --package-name="Dolphin Emulator"
+	--keyword=GetStringT --keyword=_trans --keyword=tr --keyword=QT_TR_NOOP \
+	--add-comments=i18n -p ./Languages/po -o dolphin-emu.pot -f - --package-name="Dolphin Emulator"
 
 sed -i "s/SOME DESCRIPTIVE TITLE\./Translation of dolphin-emu.pot to LANGUAGE/" Languages/po/dolphin-emu.pot
 sed -i "s/YEAR THE PACKAGE'S COPYRIGHT HOLDER/2003-2013/" Languages/po/dolphin-emu.pot
 sed -i "s/license as the PACKAGE package/license as the dolphin-emu package/" Languages/po/dolphin-emu.pot
-
-# XXX: Disabled now that we use Transifex (the tool will handle this automatically).
-#POTFILE=./Languages/po/dolphin-emu.pot
-#PO_FILES=$(find ./Languages/po -name '*.po')
-#for PO in $PO_FILES
-#do
-#	msgmerge --quiet --update --backup=none -s $PO $POTFILE
-#done

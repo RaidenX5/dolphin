@@ -34,6 +34,7 @@
 #include "DolphinQt2/Config/ControllersWindow.h"
 
 #include "DolphinQt2/Config/Graphics/GraphicsWindow.h"
+#include "DolphinQt2/Config/LoggerWidget.h"
 #include "DolphinQt2/Config/Mapping/MappingWindow.h"
 #include "DolphinQt2/Config/SettingsWindow.h"
 #include "DolphinQt2/Host.h"
@@ -134,6 +135,7 @@ void MainWindow::CreateComponents()
   m_controllers_window = new ControllersWindow(this);
   m_settings_window = new SettingsWindow(this);
   m_hotkey_window = new MappingWindow(this, 0);
+  m_logger_widget = new LoggerWidget(this);
 
   connect(this, &MainWindow::EmulationStarted, m_settings_window,
           &SettingsWindow::EmulationStarted);
@@ -184,6 +186,10 @@ void MainWindow::ConnectMenuBar()
   connect(m_menu_bar, &MenuBar::SetStateSlot, this, &MainWindow::SetStateSlot);
 
   // Options
+  connect(m_menu_bar, &MenuBar::Configure, this, &MainWindow::ShowSettingsWindow);
+  connect(m_menu_bar, &MenuBar::ConfigureGraphics, this, &MainWindow::ShowGraphicsWindow);
+  connect(m_menu_bar, &MenuBar::ConfigureAudio, this, &MainWindow::ShowAudioWindow);
+  connect(m_menu_bar, &MenuBar::ConfigureControllers, this, &MainWindow::ShowControllersWindow);
   connect(m_menu_bar, &MenuBar::ConfigureHotkeys, this, &MainWindow::ShowHotkeyDialog);
 
   // Tools
@@ -191,10 +197,16 @@ void MainWindow::ConnectMenuBar()
   connect(m_menu_bar, &MenuBar::BootWiiSystemMenu, this, &MainWindow::BootWiiSystemMenu);
 
   // View
-  connect(m_menu_bar, &MenuBar::ShowTable, m_game_list, &GameList::SetTableView);
   connect(m_menu_bar, &MenuBar::ShowList, m_game_list, &GameList::SetListView);
+  connect(m_menu_bar, &MenuBar::ShowGrid, m_game_list, &GameList::SetGridView);
   connect(m_menu_bar, &MenuBar::ColumnVisibilityToggled, m_game_list,
           &GameList::OnColumnVisibilityToggled);
+
+  connect(m_menu_bar, &MenuBar::GameListPlatformVisibilityToggled, m_game_list,
+          &GameList::OnGameListVisibilityChanged);
+  connect(m_menu_bar, &MenuBar::GameListRegionVisibilityToggled, m_game_list,
+          &GameList::OnGameListVisibilityChanged);
+
   connect(m_menu_bar, &MenuBar::ShowAboutDialog, this, &MainWindow::ShowAboutDialog);
 
   connect(this, &MainWindow::EmulationStarted, m_menu_bar, &MenuBar::EmulationStarted);
@@ -261,7 +273,9 @@ void MainWindow::ConnectRenderWidget()
 void MainWindow::ConnectStack()
 {
   m_stack->addWidget(m_game_list);
+
   setCentralWidget(m_stack);
+  addDockWidget(Qt::RightDockWidgetArea, m_logger_widget);
 }
 
 void MainWindow::Open()
@@ -503,6 +517,12 @@ void MainWindow::ShowSettingsWindow()
   m_settings_window->show();
   m_settings_window->raise();
   m_settings_window->activateWindow();
+}
+
+void MainWindow::ShowAudioWindow()
+{
+  m_settings_window->SelectAudioPane();
+  ShowSettingsWindow();
 }
 
 void MainWindow::ShowAboutDialog()

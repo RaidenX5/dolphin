@@ -43,6 +43,7 @@
 #include "VideoCommon/PixelEngine.h"
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/RenderState.h"
+#include "VideoCommon/ShaderGenCommon.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
@@ -446,6 +447,12 @@ Renderer::Renderer()
   // Clip distance support is useless without a method to clamp the depth range
   g_Config.backend_info.bSupportsDepthClamp = GLExtensions::Supports("GL_ARB_depth_clamp");
 
+  // Desktop OpenGL supports bitfield manulipation and dynamic sampler indexing if it supports
+  // shader5. OpenGL ES 3.1 supports it implicitly without an extension
+  g_Config.backend_info.bSupportsBitfield = GLExtensions::Supports("GL_ARB_gpu_shader5");
+  g_Config.backend_info.bSupportsDynamicSamplerIndexing =
+      GLExtensions::Supports("GL_ARB_gpu_shader5");
+
   g_ogl_config.bSupportsGLSLCache = GLExtensions::Supports("GL_ARB_get_program_binary");
   g_ogl_config.bSupportsGLPinnedMemory = GLExtensions::Supports("GL_AMD_pinned_memory");
   g_ogl_config.bSupportsGLSync = GLExtensions::Supports("GL_ARB_sync");
@@ -470,6 +477,8 @@ Renderer::Renderer()
   g_Config.backend_info.bSupportsComputeShaders = GLExtensions::Supports("GL_ARB_compute_shader");
   g_Config.backend_info.bSupportsST3CTextures =
       GLExtensions::Supports("GL_EXT_texture_compression_s3tc");
+  g_Config.backend_info.bSupportsBPTCTextures =
+      GLExtensions::Supports("GL_ARB_texture_compression_bptc");
 
   if (GLInterface->GetMode() == GLInterfaceMode::MODE_OPENGLES3)
   {
@@ -514,6 +523,8 @@ Renderer::Renderer()
       g_ogl_config.bSupportsMSAA = true;
       g_ogl_config.bSupportsTextureStorage = true;
       g_ogl_config.bSupports2DTextureStorageMultisample = true;
+      g_Config.backend_info.bSupportsBitfield = true;
+      g_Config.backend_info.bSupportsDynamicSamplerIndexing = g_ogl_config.bSupportsAEP;
       if (g_ActiveConfig.iStereoMode > 0 && g_ActiveConfig.iMultisamples > 1 &&
           !g_ogl_config.bSupports3DTextureStorageMultisample)
       {
@@ -541,6 +552,8 @@ Renderer::Renderer()
       g_ogl_config.bSupportsTextureStorage = true;
       g_ogl_config.bSupports2DTextureStorageMultisample = true;
       g_ogl_config.bSupports3DTextureStorageMultisample = true;
+      g_Config.backend_info.bSupportsBitfield = true;
+      g_Config.backend_info.bSupportsDynamicSamplerIndexing = true;
     }
   }
   else
@@ -663,6 +676,9 @@ Renderer::Renderer()
 
   g_Config.VerifyValidity();
   UpdateActiveConfig();
+
+  // Since we modify the config here, we need to update the last host bits, it may have changed.
+  m_last_host_config_bits = ShaderHostConfig::GetCurrent().bits;
 
   OSD::AddMessage(StringFromFormat("Video Info: %s, %s, %s", g_ogl_config.gl_vendor,
                                    g_ogl_config.gl_renderer, g_ogl_config.gl_version),
@@ -1458,6 +1474,7 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight,
 
   // Clean out old stuff from caches. It's not worth it to clean out the shader caches.
   g_texture_cache->Cleanup(frameCount);
+  ProgramShaderCache::RetrieveAsyncShaders();
 
   // Render to the framebuffer.
   FramebufferManager::SetFramebuffer(0);
@@ -1468,6 +1485,10 @@ void Renderer::SwapImpl(u32 xfbAddr, u32 fbWidth, u32 fbStride, u32 fbHeight,
 
   UpdateActiveConfig();
   g_texture_cache->OnConfigChanged(g_ActiveConfig);
+
+  // Invalidate shader cache when the host config changes.
+  if (CheckForHostConfigChanges())
+    ProgramShaderCache::Reload();
 
   // For testing zbuffer targets.
   // Renderer::SetZBufferRender();
@@ -1750,10 +1771,9 @@ void Renderer::RestoreAPIState()
   SetBlendMode(true);
   SetViewport();
 
+  ProgramShaderCache::BindLastVertexFormat();
   const VertexManager* const vm = static_cast<VertexManager*>(g_vertex_manager.get());
   glBindBuffer(GL_ARRAY_BUFFER, vm->m_vertex_buffers);
-  if (vm->m_last_vao)
-    glBindVertexArray(vm->m_last_vao);
 
   OGLTexture::SetStage();
 }

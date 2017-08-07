@@ -31,8 +31,8 @@
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 
+#include "Common/Config/Config.h"
 #include "Core/Boot/Boot.h"
-#include "Core/Config/Config.h"
 #include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/ConfigLoaders/NetPlayConfigLoader.h"
 #include "Core/ConfigManager.h"
@@ -241,12 +241,6 @@ bool BootCore(std::unique_ptr<BootParameters> boot)
   // Load game specific settings
   if (!std::holds_alternative<BootParameters::IPL>(boot->parameters))
   {
-    std::string game_id = SConfig::GetInstance().GetGameID();
-    u16 revision = SConfig::GetInstance().GetRevision();
-
-    Config::AddLoadLayer(ConfigLoaders::GenerateGlobalGameConfigLoader(game_id, revision));
-    Config::AddLoadLayer(ConfigLoaders::GenerateLocalGameConfigLoader(game_id, revision));
-
     IniFile game_ini = StartUp.LoadGameIni();
 
     // General settings
@@ -357,7 +351,7 @@ bool BootCore(std::unique_ptr<BootParameters> boot)
 
   if (NetPlay::IsNetPlayRunning())
   {
-    Config::AddLoadLayer(ConfigLoaders::GenerateNetPlayConfigLoader(g_NetPlaySettings));
+    Config::AddLayer(ConfigLoaders::GenerateNetPlayConfigLoader(g_NetPlaySettings));
     StartUp.bCPUThread = g_NetPlaySettings.m_CPUthread;
     StartUp.bEnableCheats = g_NetPlaySettings.m_EnableCheats;
     StartUp.bDSPHLE = g_NetPlaySettings.m_DSPHLE;

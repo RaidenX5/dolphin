@@ -78,6 +78,9 @@ void VideoBackend::InitBackendInfo()
   g_Config.backend_info.bSupportsInternalResolutionFrameDumps = false;
   g_Config.backend_info.bSupportsGPUTextureDecoding = false;
   g_Config.backend_info.bSupportsST3CTextures = false;
+  g_Config.backend_info.bSupportsBitfield = false;
+  g_Config.backend_info.bSupportsDynamicSamplerIndexing = false;
+  g_Config.backend_info.bSupportsBPTCTextures = false;
 
   IDXGIFactory* factory;
   IDXGIAdapter* ad;
@@ -159,6 +162,7 @@ void VideoBackend::Video_Prepare()
   VertexShaderCache::Init();
   PixelShaderCache::Init();
   GeometryShaderCache::Init();
+  VertexShaderCache::WaitForBackgroundCompilesToComplete();
   D3D::InitUtils();
   BBox::Init();
 }

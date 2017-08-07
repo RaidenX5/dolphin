@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "Core/Config/Config.h"
+#include "Common/Config/Config.h"
 
 namespace Config
 {
@@ -59,6 +59,11 @@ extern const ConfigInfo<bool> GFX_ENABLE_VALIDATION_LAYER;
 extern const ConfigInfo<bool> GFX_BACKEND_MULTITHREADING;
 extern const ConfigInfo<int> GFX_COMMAND_BUFFER_EXECUTE_INTERVAL;
 extern const ConfigInfo<bool> GFX_SHADER_CACHE;
+extern const ConfigInfo<bool> GFX_BACKGROUND_SHADER_COMPILING;
+extern const ConfigInfo<bool> GFX_DISABLE_SPECIALIZED_SHADERS;
+extern const ConfigInfo<bool> GFX_PRECOMPILE_UBER_SHADERS;
+extern const ConfigInfo<int> GFX_SHADER_COMPILER_THREADS;
+extern const ConfigInfo<int> GFX_SHADER_PRECOMPILER_THREADS;
 
 extern const ConfigInfo<bool> GFX_SW_ZCOMPLOC;
 extern const ConfigInfo<bool> GFX_SW_ZFREEZE;
@@ -67,6 +72,8 @@ extern const ConfigInfo<bool> GFX_SW_DUMP_TEV_STAGES;
 extern const ConfigInfo<bool> GFX_SW_DUMP_TEV_TEX_FETCHES;
 extern const ConfigInfo<int> GFX_SW_DRAW_START;
 extern const ConfigInfo<int> GFX_SW_DRAW_END;
+
+extern const ConfigInfo<bool> GFX_PREFER_GLES;
 
 // Graphics.Enhancements
 

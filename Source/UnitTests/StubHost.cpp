@@ -51,16 +51,13 @@ bool Host_RendererIsFullscreen()
 {
   return false;
 }
-void Host_ConnectWiimote(int, bool)
-{
-}
-void Host_SetWiiMoteConnectionState(int)
-{
-}
 void Host_ShowVideoConfig(void*, const std::string&)
 {
 }
 void Host_YieldToUI()
+{
+}
+void Host_UpdateProgressDialog(const char* caption, int position, int total)
 {
 }
 std::unique_ptr<cInterfaceBase> HostGL_CreateGLInterface()

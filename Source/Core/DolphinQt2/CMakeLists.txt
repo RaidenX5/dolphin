@@ -37,6 +37,7 @@ set(SRCS
   Config/Graphics/GraphicsWindow.cpp
   Config/Graphics/SoftwareRendererWidget.cpp
   Config/InfoWidget.cpp
+  Config/LoggerWidget.cpp
   Config/Mapping/GCKeyboardEmu.cpp
   Config/Mapping/GCPadEmu.cpp
   Config/Mapping/GCPadWiiU.cpp
@@ -62,9 +63,12 @@ set(SRCS
   GameList/GameList.cpp
   GameList/GameListModel.cpp
   GameList/GameTracker.cpp
+  GameList/GridProxyModel.cpp
   GameList/ListProxyModel.cpp
+  QtUtils/BlockUserInputFilter.cpp
   QtUtils/DoubleClickEventFilter.cpp
   QtUtils/ElidedButton.cpp
+  QtUtils/ListTabWidget.cpp
   QtUtils/WindowActivationEventFilter.cpp
   Settings/AudioPane.cpp
   Settings/GeneralPane.cpp

@@ -113,9 +113,6 @@ bool Renderer::Initialize()
                                                m_bounding_box->GetGPUBufferSize());
   }
 
-  // Ensure all pipelines previously used by the game have been created.
-  StateTracker::GetInstance()->LoadPipelineUIDCache();
-
   // Initialize post processing.
   m_post_processor = std::make_unique<VulkanPostProcessing>();
   if (!static_cast<VulkanPostProcessing*>(m_post_processor.get())
@@ -462,8 +459,8 @@ void Renderer::ClearScreen(const EFBRectangle& rc, bool color_enable, bool alpha
   UtilityShaderDraw draw(g_command_buffer_mgr->GetCurrentCommandBuffer(),
                          g_object_cache->GetPipelineLayout(PIPELINE_LAYOUT_STANDARD),
                          FramebufferManager::GetInstance()->GetEFBLoadRenderPass(),
-                         g_object_cache->GetPassthroughVertexShader(),
-                         g_object_cache->GetPassthroughGeometryShader(), m_clear_fragment_shader);
+                         g_shader_cache->GetPassthroughVertexShader(),
+                         g_shader_cache->GetPassthroughGeometryShader(), m_clear_fragment_shader);
 
   draw.SetRasterizationState(rs_state);
   draw.SetDepthStencilState(depth_state);
@@ -589,6 +586,9 @@ void Renderer::SwapImpl(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height
 
   // Clean up stale textures.
   TextureCache::GetInstance()->Cleanup(frameCount);
+
+  // Pull in now-ready async shaders.
+  g_shader_cache->RetrieveAsyncShaders();
 }
 
 void Renderer::TransitionBuffersForSwap(const TargetRectangle& scaled_rect,
@@ -1126,13 +1126,10 @@ void Renderer::CheckForSurfaceChange()
 void Renderer::CheckForConfigChanges()
 {
   // Save the video config so we can compare against to determine which settings have changed.
-  u32 old_multisamples = g_ActiveConfig.iMultisamples;
   int old_anisotropy = g_ActiveConfig.iMaxAnisotropy;
-  int old_stereo_mode = g_ActiveConfig.iStereoMode;
   int old_aspect_ratio = g_ActiveConfig.iAspectRatio;
   int old_efb_scale = g_ActiveConfig.iEFBScale;
   bool old_force_filtering = g_ActiveConfig.bForceFiltering;
-  bool old_ssaa = g_ActiveConfig.bSSAA;
   bool old_use_xfb = g_ActiveConfig.bUseXFB;
   bool old_use_realxfb = g_ActiveConfig.bUseRealXFB;
 
@@ -1142,11 +1139,8 @@ void Renderer::CheckForConfigChanges()
   UpdateActiveConfig();
 
   // Determine which (if any) settings have changed.
-  bool msaa_changed = old_multisamples != g_ActiveConfig.iMultisamples;
-  bool ssaa_changed = old_ssaa != g_ActiveConfig.bSSAA;
   bool anisotropy_changed = old_anisotropy != g_ActiveConfig.iMaxAnisotropy;
   bool force_texture_filtering_changed = old_force_filtering != g_ActiveConfig.bForceFiltering;
-  bool stereo_changed = old_stereo_mode != g_ActiveConfig.iStereoMode;
   bool efb_scale_changed = old_efb_scale != g_ActiveConfig.iEFBScale;
   bool aspect_changed = old_aspect_ratio != g_ActiveConfig.iAspectRatio;
   bool use_xfb_changed = old_use_xfb != g_ActiveConfig.bUseXFB;
@@ -1164,23 +1158,20 @@ void Renderer::CheckForConfigChanges()
 
   // MSAA samples changed, we need to recreate the EFB render pass.
   // If the stereoscopy mode changed, we need to recreate the buffers as well.
-  if (msaa_changed || stereo_changed)
+  // SSAA changed on/off, we have to recompile shaders.
+  // Changing stereoscopy from off<->on also requires shaders to be recompiled.
+  if (CheckForHostConfigChanges())
   {
     g_command_buffer_mgr->WaitForGPUIdle();
     FramebufferManager::GetInstance()->RecreateRenderPass();
     FramebufferManager::GetInstance()->ResizeEFBTextures();
     BindEFBToStateTracker();
-  }
-
-  // SSAA changed on/off, we can leave the buffers/render pass, but have to recompile shaders.
-  // Changing stereoscopy from off<->on also requires shaders to be recompiled.
-  if (msaa_changed || ssaa_changed || stereo_changed)
-  {
-    g_command_buffer_mgr->WaitForGPUIdle();
     RecompileShaders();
     FramebufferManager::GetInstance()->RecompileShaders();
-    g_object_cache->RecompileSharedShaders();
-    StateTracker::GetInstance()->LoadPipelineUIDCache();
+    g_shader_cache->ReloadShaderAndPipelineCaches();
+    g_shader_cache->RecompileSharedShaders();
+    StateTracker::GetInstance()->InvalidateShaderPointers();
+    StateTracker::GetInstance()->ReloadPipelineUIDCache();
   }
 
   // For vsync, we need to change the present mode, which means recreating the swap chain.
@@ -1509,7 +1500,7 @@ bool Renderer::CompileShaders()
 
   )";
 
-  std::string source = g_object_cache->GetUtilityShaderHeader() + CLEAR_FRAGMENT_SHADER_SOURCE;
+  std::string source = g_shader_cache->GetUtilityShaderHeader() + CLEAR_FRAGMENT_SHADER_SOURCE;
   m_clear_fragment_shader = Util::CompileAndCreateFragmentShader(source);
 
   return m_clear_fragment_shader != VK_NULL_HANDLE;

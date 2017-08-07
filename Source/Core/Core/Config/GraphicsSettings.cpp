@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "Core/Config/Config.h"
+#include "Common/Config/Config.h"
 #include "VideoCommon/VideoConfig.h"
 
 namespace Config
@@ -77,6 +77,16 @@ const ConfigInfo<bool> GFX_BACKEND_MULTITHREADING{
 const ConfigInfo<int> GFX_COMMAND_BUFFER_EXECUTE_INTERVAL{
     {System::GFX, "Settings", "CommandBufferExecuteInterval"}, 100};
 const ConfigInfo<bool> GFX_SHADER_CACHE{{System::GFX, "Settings", "ShaderCache"}, true};
+const ConfigInfo<bool> GFX_BACKGROUND_SHADER_COMPILING{
+    {System::GFX, "Settings", "BackgroundShaderCompiling"}, false};
+const ConfigInfo<bool> GFX_DISABLE_SPECIALIZED_SHADERS{
+    {System::GFX, "Settings", "DisableSpecializedShaders"}, false};
+const ConfigInfo<bool> GFX_PRECOMPILE_UBER_SHADERS{
+    {System::GFX, "Settings", "PrecompileUberShaders"}, true};
+const ConfigInfo<int> GFX_SHADER_COMPILER_THREADS{
+    {System::GFX, "Settings", "ShaderCompilerThreads"}, 1};
+const ConfigInfo<int> GFX_SHADER_PRECOMPILER_THREADS{
+    {System::GFX, "Settings", "ShaderPrecompilerThreads"}, 1};
 
 const ConfigInfo<bool> GFX_SW_ZCOMPLOC{{System::GFX, "Settings", "SWZComploc"}, true};
 const ConfigInfo<bool> GFX_SW_ZFREEZE{{System::GFX, "Settings", "SWZFreeze"}, true};
@@ -86,6 +96,8 @@ const ConfigInfo<bool> GFX_SW_DUMP_TEV_TEX_FETCHES{{System::GFX, "Settings", "SW
                                                    false};
 const ConfigInfo<int> GFX_SW_DRAW_START{{System::GFX, "Settings", "SWDrawStart"}, 0};
 const ConfigInfo<int> GFX_SW_DRAW_END{{System::GFX, "Settings", "SWDrawEnd"}, 100000};
+
+const ConfigInfo<bool> GFX_PREFER_GLES{{System::GFX, "Settings", "PreferGLES"}, false};
 
 // Graphics.Enhancements
 

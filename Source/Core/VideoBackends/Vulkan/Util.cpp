@@ -12,6 +12,7 @@
 
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 #include "VideoBackends/Vulkan/ObjectCache.h"
+#include "VideoBackends/Vulkan/ShaderCache.h"
 #include "VideoBackends/Vulkan/ShaderCompiler.h"
 #include "VideoBackends/Vulkan/StateTracker.h"
 #include "VideoBackends/Vulkan/StreamBuffer.h"
@@ -60,6 +61,7 @@ bool IsCompressedFormat(VkFormat format)
   case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
   case VK_FORMAT_BC2_UNORM_BLOCK:
   case VK_FORMAT_BC3_UNORM_BLOCK:
+  case VK_FORMAT_BC7_UNORM_BLOCK:
     return true;
 
   default:
@@ -101,6 +103,9 @@ VkFormat GetVkFormatForHostTextureFormat(AbstractTextureFormat format)
   case AbstractTextureFormat::DXT5:
     return VK_FORMAT_BC3_UNORM_BLOCK;
 
+  case AbstractTextureFormat::BPTC:
+    return VK_FORMAT_BC7_UNORM_BLOCK;
+
   case AbstractTextureFormat::RGBA8:
   default:
     return VK_FORMAT_R8G8B8A8_UNORM;
@@ -129,6 +134,7 @@ u32 GetTexelSize(VkFormat format)
 
   case VK_FORMAT_BC2_UNORM_BLOCK:
   case VK_FORMAT_BC3_UNORM_BLOCK:
+  case VK_FORMAT_BC7_UNORM_BLOCK:
     return 16;
 
   default:
@@ -144,6 +150,7 @@ u32 GetBlockSize(VkFormat format)
   case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
   case VK_FORMAT_BC2_UNORM_BLOCK:
   case VK_FORMAT_BC3_UNORM_BLOCK:
+  case VK_FORMAT_BC7_UNORM_BLOCK:
     return 4;
 
   default:
@@ -275,50 +282,38 @@ VkShaderModule CreateShaderModule(const u32* spv, size_t spv_word_count)
   return module;
 }
 
-VkShaderModule CompileAndCreateVertexShader(const std::string& source_code, bool prepend_header)
+VkShaderModule CompileAndCreateVertexShader(const std::string& source_code)
 {
   ShaderCompiler::SPIRVCodeVector code;
-  if (!ShaderCompiler::CompileVertexShader(&code, source_code.c_str(), source_code.length(),
-                                           prepend_header))
-  {
+  if (!ShaderCompiler::CompileVertexShader(&code, source_code.c_str(), source_code.length()))
     return VK_NULL_HANDLE;
-  }
 
   return CreateShaderModule(code.data(), code.size());
 }
 
-VkShaderModule CompileAndCreateGeometryShader(const std::string& source_code, bool prepend_header)
+VkShaderModule CompileAndCreateGeometryShader(const std::string& source_code)
 {
   ShaderCompiler::SPIRVCodeVector code;
-  if (!ShaderCompiler::CompileGeometryShader(&code, source_code.c_str(), source_code.length(),
-                                             prepend_header))
-  {
+  if (!ShaderCompiler::CompileGeometryShader(&code, source_code.c_str(), source_code.length()))
     return VK_NULL_HANDLE;
-  }
 
   return CreateShaderModule(code.data(), code.size());
 }
 
-VkShaderModule CompileAndCreateFragmentShader(const std::string& source_code, bool prepend_header)
+VkShaderModule CompileAndCreateFragmentShader(const std::string& source_code)
 {
   ShaderCompiler::SPIRVCodeVector code;
-  if (!ShaderCompiler::CompileFragmentShader(&code, source_code.c_str(), source_code.length(),
-                                             prepend_header))
-  {
+  if (!ShaderCompiler::CompileFragmentShader(&code, source_code.c_str(), source_code.length()))
     return VK_NULL_HANDLE;
-  }
 
   return CreateShaderModule(code.data(), code.size());
 }
 
-VkShaderModule CompileAndCreateComputeShader(const std::string& source_code, bool prepend_header)
+VkShaderModule CompileAndCreateComputeShader(const std::string& source_code)
 {
   ShaderCompiler::SPIRVCodeVector code;
-  if (!ShaderCompiler::CompileComputeShader(&code, source_code.c_str(), source_code.length(),
-                                            prepend_header))
-  {
+  if (!ShaderCompiler::CompileComputeShader(&code, source_code.c_str(), source_code.length()))
     return VK_NULL_HANDLE;
-  }
 
   return CreateShaderModule(code.data(), code.size());
 }
@@ -586,8 +581,7 @@ void UtilityShaderDraw::BindDescriptors()
 {
   // TODO: This method is a mess, clean it up
   std::array<VkDescriptorSet, NUM_DESCRIPTOR_SET_BIND_POINTS> bind_descriptor_sets = {};
-  std::array<VkWriteDescriptorSet, NUM_UBO_DESCRIPTOR_SET_BINDINGS + NUM_PIXEL_SHADER_SAMPLERS>
-      set_writes = {};
+  std::array<VkWriteDescriptorSet, NUM_UBO_DESCRIPTOR_SET_BINDINGS + 1> set_writes = {};
   uint32_t num_set_writes = 0;
 
   VkDescriptorBufferInfo dummy_uniform_buffer = {
@@ -644,29 +638,32 @@ void UtilityShaderDraw::BindDescriptors()
   // Check if we have any at all, skip the binding process entirely if we don't
   if (first_active_sampler != NUM_PIXEL_SHADER_SAMPLERS)
   {
+    // We need to fill it with non-empty images.
+    for (size_t i = 0; i < NUM_PIXEL_SHADER_SAMPLERS; i++)
+    {
+      if (m_ps_samplers[i].imageView == VK_NULL_HANDLE)
+      {
+        m_ps_samplers[i].imageView = g_object_cache->GetDummyImageView();
+        m_ps_samplers[i].sampler = g_object_cache->GetPointSampler();
+      }
+    }
+
     // Allocate a new descriptor set
     VkDescriptorSet set = g_command_buffer_mgr->AllocateDescriptorSet(
         g_object_cache->GetDescriptorSetLayout(DESCRIPTOR_SET_LAYOUT_PIXEL_SHADER_SAMPLERS));
     if (set == VK_NULL_HANDLE)
       PanicAlert("Failed to allocate descriptor set for utility draw");
 
-    for (size_t i = 0; i < NUM_PIXEL_SHADER_SAMPLERS; i++)
-    {
-      const VkDescriptorImageInfo& info = m_ps_samplers[i];
-      if (info.imageView != VK_NULL_HANDLE && info.sampler != VK_NULL_HANDLE)
-      {
-        set_writes[num_set_writes++] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                        nullptr,
-                                        set,
-                                        static_cast<uint32_t>(i),
-                                        0,
-                                        1,
-                                        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                        &info,
-                                        nullptr,
-                                        nullptr};
-      }
-    }
+    set_writes[num_set_writes++] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                    nullptr,
+                                    set,
+                                    0,
+                                    0,
+                                    static_cast<u32>(NUM_PIXEL_SHADER_SAMPLERS),
+                                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                    m_ps_samplers.data(),
+                                    nullptr,
+                                    nullptr};
 
     bind_descriptor_sets[DESCRIPTOR_SET_BIND_POINT_PIXEL_SHADER_SAMPLERS] = set;
   }
@@ -732,7 +729,7 @@ void UtilityShaderDraw::BindDescriptors()
 
 bool UtilityShaderDraw::BindPipeline()
 {
-  VkPipeline pipeline = g_object_cache->GetPipeline(m_pipeline_info);
+  VkPipeline pipeline = g_shader_cache->GetPipeline(m_pipeline_info);
   if (pipeline == VK_NULL_HANDLE)
   {
     PanicAlert("Failed to get pipeline for backend shader draw");
@@ -885,7 +882,7 @@ void ComputeShaderDispatcher::BindDescriptors()
 
 bool ComputeShaderDispatcher::BindPipeline()
 {
-  VkPipeline pipeline = g_object_cache->GetComputePipeline(m_pipeline_info);
+  VkPipeline pipeline = g_shader_cache->GetComputePipeline(m_pipeline_info);
   if (pipeline == VK_NULL_HANDLE)
   {
     PanicAlert("Failed to get pipeline for backend compute dispatch");

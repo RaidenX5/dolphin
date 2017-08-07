@@ -15,6 +15,7 @@
 #include "DolphinQt2/ToolBar.h"
 
 class HotkeyScheduler;
+class LoggerWidget;
 class MappingWindow;
 class SettingsWindow;
 class ControllersWindow;
@@ -36,7 +37,7 @@ signals:
   void EmulationPaused();
   void EmulationStopped();
 
-private slots:
+private:
   void Open();
   void Play();
   void Pause();
@@ -63,7 +64,6 @@ private slots:
   void FullScreen();
   void ScreenShot();
 
-private:
   void CreateComponents();
 
   void ConnectGameList();
@@ -83,6 +83,7 @@ private:
   void HideRenderWidget();
 
   void ShowSettingsWindow();
+  void ShowAudioWindow();
   void ShowControllersWindow();
   void ShowGraphicsWindow();
   void ShowAboutDialog();
@@ -109,4 +110,5 @@ private:
   SettingsWindow* m_settings_window;
   MappingWindow* m_hotkey_window;
   GraphicsWindow* m_graphics_window;
+  LoggerWidget* m_logger_widget;
 };

@@ -49,6 +49,8 @@ enum TitleFlags : u32
   TITLE_TYPE_0x4 = 0x4,
   // Used for DLC titles.
   TITLE_TYPE_DATA = 0x8,
+  // Unknown.
+  TITLE_TYPE_0x10 = 0x10,
   // Appears to be used for WFS titles.
   TITLE_TYPE_WFS_MAYBE = 0x20,
   // Unknown.
@@ -236,6 +238,10 @@ public:
   // Decrypts the title key field for a "personalised" ticket -- one that is device-specific
   // and has a title key that must be decrypted first.
   HLE::ReturnCode Unpersonalise(HLE::IOSC& iosc);
+
+  // Reset the common key field back to 0 if it's an incorrect value.
+  // Intended for use before importing fakesigned tickets, which tend to have a high bogus index.
+  void FixCommonKeyIndex();
 };
 
 class SharedContentMap final

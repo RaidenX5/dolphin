@@ -185,10 +185,9 @@ std::vector<DXGI_SAMPLE_DESC> EnumAAModes(IDXGIAdapter* adapter)
   ID3D11Device* _device;
   ID3D11DeviceContext* _context;
   D3D_FEATURE_LEVEL feat_level;
-  HRESULT hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-                                  D3D11_CREATE_DEVICE_SINGLETHREADED, supported_feature_levels,
-                                  NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, &_device,
-                                  &feat_level, &_context);
+  HRESULT hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0,
+                                  supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS,
+                                  D3D11_SDK_VERSION, &_device, &feat_level, &_context);
   if (FAILED(hr) || feat_level == D3D_FEATURE_LEVEL_10_0)
   {
     DXGI_SAMPLE_DESC desc;
@@ -221,9 +220,9 @@ std::vector<DXGI_SAMPLE_DESC> EnumAAModes(IDXGIAdapter* adapter)
 D3D_FEATURE_LEVEL GetFeatureLevel(IDXGIAdapter* adapter)
 {
   D3D_FEATURE_LEVEL feat_level = D3D_FEATURE_LEVEL_9_1;
-  PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_SINGLETHREADED,
-                     supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION,
-                     nullptr, &feat_level, nullptr);
+  PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, supported_feature_levels,
+                     NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, nullptr, &feat_level,
+                     nullptr);
   return feat_level;
 }
 
@@ -238,6 +237,16 @@ static bool SupportsS3TCTextures(ID3D11Device* dev)
   }
 
   return ((bc1_support & bc2_support & bc3_support) & D3D11_FORMAT_SUPPORT_TEXTURE2D) != 0;
+}
+
+static bool SupportsBPTCTextures(ID3D11Device* dev)
+{
+  // Currently, we only care about BC7. This could be extended to BC6H in the future.
+  UINT bc7_support;
+  if (FAILED(dev->CheckFormatSupport(DXGI_FORMAT_BC7_UNORM, &bc7_support)))
+    return false;
+
+  return (bc7_support & D3D11_FORMAT_SUPPORT_TEXTURE2D) != 0;
 }
 
 HRESULT Create(HWND wnd)
@@ -311,8 +320,7 @@ HRESULT Create(HWND wnd)
   // Creating debug devices can sometimes fail if the user doesn't have the correct
   // version of the DirectX SDK. If it does, simply fallback to a non-debug device.
   {
-    hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-                            D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_DEBUG,
+    hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_DEBUG,
                             supported_feature_levels, NUM_SUPPORTED_FEATURE_LEVELS,
                             D3D11_SDK_VERSION, &device, &featlevel, &context);
 
@@ -339,8 +347,7 @@ HRESULT Create(HWND wnd)
   if (FAILED(hr))
 #endif
   {
-    hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-                            D3D11_CREATE_DEVICE_SINGLETHREADED, supported_feature_levels,
+    hr = PD3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, supported_feature_levels,
                             NUM_SUPPORTED_FEATURE_LEVELS, D3D11_SDK_VERSION, &device, &featlevel,
                             &context);
   }
@@ -423,6 +430,7 @@ HRESULT Create(HWND wnd)
   device->CheckFormatSupport(DXGI_FORMAT_B8G8R8A8_UNORM, &format_support);
   bgra_textures_supported = (format_support & D3D11_FORMAT_SUPPORT_TEXTURE2D) != 0;
   g_Config.backend_info.bSupportsST3CTextures = SupportsS3TCTextures(device);
+  g_Config.backend_info.bSupportsBPTCTextures = SupportsBPTCTextures(device);
 
   stateman = new StateManager;
   return S_OK;

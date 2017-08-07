@@ -236,6 +236,8 @@ void VulkanContext::PopulateBackendInfo(VideoConfig* config)
   config->backend_info.bSupportsMultithreading = true;        // Assumed support.
   config->backend_info.bSupportsComputeShaders = true;        // Assumed support.
   config->backend_info.bSupportsGPUTextureDecoding = true;    // Assumed support.
+  config->backend_info.bSupportsBitfield = true;              // Assumed support.
+  config->backend_info.bSupportsDynamicSamplerIndexing = true;        // Assumed support.
   config->backend_info.bSupportsInternalResolutionFrameDumps = true;  // Assumed support.
   config->backend_info.bSupportsPostProcessing = true;                // Assumed support.
   config->backend_info.bSupportsDualSourceBlend = false;              // Dependent on features.
@@ -246,6 +248,7 @@ void VulkanContext::PopulateBackendInfo(VideoConfig* config)
   config->backend_info.bSupportsSSAA = false;                         // Dependent on features.
   config->backend_info.bSupportsDepthClamp = false;                   // Dependent on features.
   config->backend_info.bSupportsST3CTextures = false;                 // Dependent on features.
+  config->backend_info.bSupportsBPTCTextures = false;                 // Dependent on features.
   config->backend_info.bSupportsReversedDepthRange = false;  // No support yet due to driver bugs.
 }
 
@@ -285,7 +288,9 @@ void VulkanContext::PopulateBackendInfoFeatures(VideoConfig* config, VkPhysicalD
       (features.depthClamp == VK_TRUE && features.shaderClipDistance == VK_TRUE);
 
   // textureCompressionBC implies BC1 through BC7, which is a superset of DXT1/3/5, which we need.
-  config->backend_info.bSupportsST3CTextures = features.textureCompressionBC == VK_TRUE;
+  const bool supports_bc = features.textureCompressionBC == VK_TRUE;
+  config->backend_info.bSupportsST3CTextures = supports_bc;
+  config->backend_info.bSupportsBPTCTextures = supports_bc;
 
   // Our usage of primitive restart appears to be broken on AMD's binary drivers.
   // Seems to be fine on GCN Gen 1-2, unconfirmed on GCN Gen 3, causes driver resets on GCN Gen 4.
@@ -397,7 +402,8 @@ bool VulkanContext::SelectDeviceExtensions(ExtensionList* extension_list, bool e
   for (const auto& extension_properties : available_extension_list)
     INFO_LOG(VIDEO, "Available extension: %s", extension_properties.extensionName);
 
-  auto CheckForExtension = [&](const char* name, bool required) -> bool {
+  auto CheckForExtension = [&](const char* name, bool required,
+                               bool* has_extension = nullptr) -> bool {
     if (std::find_if(available_extension_list.begin(), available_extension_list.end(),
                      [&](const VkExtensionProperties& properties) {
                        return !strcmp(name, properties.extensionName);
@@ -405,8 +411,13 @@ bool VulkanContext::SelectDeviceExtensions(ExtensionList* extension_list, bool e
     {
       INFO_LOG(VIDEO, "Enabling extension: %s", name);
       extension_list->push_back(name);
+      if (has_extension)
+        *has_extension = true;
       return true;
     }
+
+    if (has_extension)
+      *has_extension = false;
 
     if (required)
     {
@@ -420,6 +431,7 @@ bool VulkanContext::SelectDeviceExtensions(ExtensionList* extension_list, bool e
   if (enable_surface && !CheckForExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, true))
     return false;
 
+  CheckForExtension(VK_NV_GLSL_SHADER_EXTENSION_NAME, false, &m_supports_nv_glsl_extension);
   return true;
 }
 

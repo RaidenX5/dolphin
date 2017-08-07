@@ -25,8 +25,8 @@ set(SRCS
   Boot/Boot_WiiWAD.cpp
   Boot/DolReader.cpp
   Boot/ElfReader.cpp
-  Config/Config.cpp
   Config/GraphicsSettings.cpp
+  Config/NetplaySettings.cpp
   ConfigLoaders/BaseConfigLoader.cpp
   ConfigLoaders/GameConfigLoader.cpp
   ConfigLoaders/IsSettingSaveable.cpp

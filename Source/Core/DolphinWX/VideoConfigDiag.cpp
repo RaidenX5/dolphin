@@ -308,6 +308,14 @@ static wxString gpu_texture_decoding_desc =
     wxTRANSLATE("Enables texture decoding using the GPU instead of the CPU. This may result in "
                 "performance gains in some scenarios, or on systems where the CPU is the "
                 "bottleneck.\n\nIf unsure, leave this unchecked.");
+static wxString ubershader_desc =
+    wxTRANSLATE("Disabled: Ubershaders are never used. Stuttering will occur during shader "
+                "compilation, but GPU demands are low. Recommended for low-end hardware.\n\n"
+                "Hybrid: Ubershaders will be used to prevent stuttering during shader "
+                "compilation, but traditional shaders will be used when they will not cause "
+                "stuttering. Balances performance and smoothness.\n\n"
+                "Exclusive: Ubershaders will always be used. Only recommended for high-end "
+                "systems.");
 
 VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
     : wxDialog(parent, wxID_ANY, wxString::Format(_("Dolphin %s Graphics Configuration"),
@@ -442,7 +450,7 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
         szr_other->Add(CreateCheckBox(page_general, _("Log Render Time to File"),
                                       wxGetTranslation(log_render_time_to_file_desc),
                                       Config::GFX_LOG_RENDER_TIME_TO_FILE));
-        szr_other->Add(CreateCheckBoxRefBool(page_general, _("Auto Adjust Window Size"),
+        szr_other->Add(CreateCheckBoxRefBool(page_general, _("Auto-Adjust Window Size"),
                                              wxGetTranslation(auto_window_size_desc),
                                              SConfig::GetInstance().bRenderWindowAutoSize));
         szr_other->Add(CreateCheckBox(page_general, _("Show NetPlay Messages"),
@@ -552,13 +560,36 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
 
     // AF
     {
-      const std::array<wxString, 5> af_choices{{"1x", "2x", "4x", "8x", "16x"}};
+      const std::array<wxString, 5> af_choices{{_("1x"), _("2x"), _("4x"), _("8x"), _("16x")}};
       szr_enh->Add(new wxStaticText(page_enh, wxID_ANY, _("Anisotropic Filtering:")),
                    wxGBPosition(row, 0), wxDefaultSpan, wxALIGN_CENTER_VERTICAL);
       szr_enh->Add(CreateChoice(page_enh, Config::GFX_ENHANCE_MAX_ANISOTROPY,
                                 wxGetTranslation(af_desc), af_choices.size(), af_choices.data()),
                    wxGBPosition(row, 1), span2, wxALIGN_CENTER_VERTICAL);
       row += 1;
+    }
+
+    // ubershaders
+    {
+      const std::array<wxString, 3> mode_choices = {{_("Disabled"), _("Hybrid"), _("Exclusive")}};
+
+      wxChoice* const choice_mode =
+          new wxChoice(page_enh, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                       static_cast<int>(mode_choices.size()), mode_choices.data());
+      RegisterControl(choice_mode, wxGetTranslation(ubershader_desc));
+      szr_enh->Add(new wxStaticText(page_enh, wxID_ANY, _("Ubershaders:")), wxGBPosition(row, 0),
+                   wxDefaultSpan, wxALIGN_CENTER_VERTICAL);
+      szr_enh->Add(choice_mode, wxGBPosition(row, 1), span2, wxALIGN_CENTER_VERTICAL);
+      row += 1;
+
+      // Determine ubershader mode
+      choice_mode->Bind(wxEVT_CHOICE, &VideoConfigDiag::OnUberShaderModeChanged, this);
+      if (Config::GetBase(Config::GFX_DISABLE_SPECIALIZED_SHADERS))
+        choice_mode->SetSelection(2);
+      else if (Config::GetBase(Config::GFX_BACKGROUND_SHADER_COMPILING))
+        choice_mode->SetSelection(1);
+      else
+        choice_mode->SetSelection(0);
     }
 
     // postproc shader
@@ -1325,4 +1356,14 @@ void VideoConfigDiag::OnAAChanged(wxCommandEvent& ev)
     return;
 
   Config::SetBaseOrCurrent(Config::GFX_MSAA, vconfig.backend_info.AAModes[mode]);
+}
+
+void VideoConfigDiag::OnUberShaderModeChanged(wxCommandEvent& ev)
+{
+  // 0: No ubershaders
+  // 1: Hybrid ubershaders
+  // 2: Only ubershaders
+  int mode = ev.GetInt();
+  Config::SetBaseOrCurrent(Config::GFX_BACKGROUND_SHADER_COMPILING, mode == 1);
+  Config::SetBaseOrCurrent(Config::GFX_DISABLE_SPECIALIZED_SHADERS, mode == 2);
 }

@@ -237,18 +237,18 @@ void CFrame::BindDebuggerMenuBarUpdateEvents()
 
   Bind(wxEVT_UPDATE_UI, &CFrame::OnUpdateInterpreterMenuItem, this, IDM_INTERPRETER);
 
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_LS_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_LSLXZ_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_LSLWZ_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_LSLBZX_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_LSF_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_LSP_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_FP_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_I_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_P_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_JIT_SR_OFF);
-  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCorePaused, IDM_CLEAR_CODE_CACHE);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_LS_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_LSLXZ_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_LSLWZ_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_LSLBZX_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_LSF_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_LSP_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_FP_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_I_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_P_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_JIT_SR_OFF);
+  Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreRunning, IDM_CLEAR_CODE_CACHE);
 
   Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreInitialized, IDM_SEARCH_INSTRUCTION);
   Bind(wxEVT_UPDATE_UI, &WxEventUtils::OnEnableIfCoreInitialized, IDM_CLEAR_SYMBOLS);
@@ -654,6 +654,7 @@ void CFrame::StartGame(std::unique_ptr<BootParameters> boot)
     m_game_list_ctrl->Disable();
     m_game_list_ctrl->Hide();
 
+    m_renderer_has_focus = true;
     m_render_parent = m_panel;
     m_render_frame = this;
     if (SConfig::GetInstance().bKeepWindowOnTop)
@@ -880,14 +881,14 @@ void CFrame::DoStop()
       Core::SetState(state);
     }
 
+    if (NetPlayDialog::GetNetPlayClient())
+      NetPlayDialog::GetNetPlayClient()->Stop();
+
     // TODO: Show the author/description dialog here
     if (Movie::IsRecordingInput())
       DoRecordingSave();
     if (Movie::IsMovieActive())
       Movie::EndPlayInput(false);
-
-    if (NetPlayDialog::GetNetPlayClient())
-      NetPlayDialog::GetNetPlayClient()->Stop();
 
     if (!m_tried_graceful_shutdown && UICommon::TriggerSTMPowerEvent())
     {
@@ -1110,7 +1111,7 @@ void CFrame::OnRescanGameList(wxCommandEvent& WXUNUSED(event))
 
 void CFrame::OnUpdateInterpreterMenuItem(wxUpdateUIEvent& event)
 {
-  WxEventUtils::OnEnableIfCorePaused(event);
+  WxEventUtils::OnEnableIfCoreRunning(event);
 
   if (GetMenuBar()->FindItem(IDM_INTERPRETER)->IsChecked())
     return;
@@ -1406,39 +1407,18 @@ void CFrame::OnFifoPlayer(wxCommandEvent& WXUNUSED(event))
   }
 }
 
-void CFrame::ConnectWiimote(int wm_idx, bool connect)
-{
-  if (Core::IsRunning() && SConfig::GetInstance().bWii &&
-      !SConfig::GetInstance().m_bt_passthrough_enabled)
-  {
-    bool was_unpaused = Core::PauseAndLock(true);
-    const auto ios = IOS::HLE::GetIOS();
-    if (!ios)
-      return;
-
-    const auto bt = std::static_pointer_cast<IOS::HLE::Device::BluetoothEmu>(
-        ios->GetDeviceByName("/dev/usb/oh1/57e/305"));
-    if (bt)
-      bt->AccessWiiMote(wm_idx | 0x100)->Activate(connect);
-    const char* message = connect ? "Wii Remote %i connected" : "Wii Remote %i disconnected";
-    Core::DisplayMessage(StringFromFormat(message, wm_idx + 1), 3000);
-    Host_UpdateMainFrame();
-    Core::PauseAndLock(false, was_unpaused);
-  }
-}
-
 void CFrame::OnConnectWiimote(wxCommandEvent& event)
 {
   const auto ios = IOS::HLE::GetIOS();
   if (!ios || SConfig::GetInstance().m_bt_passthrough_enabled)
     return;
-  bool was_unpaused = Core::PauseAndLock(true);
-  const auto bt = std::static_pointer_cast<IOS::HLE::Device::BluetoothEmu>(
-      ios->GetDeviceByName("/dev/usb/oh1/57e/305"));
-  const bool is_connected =
-      bt && bt->AccessWiiMote((event.GetId() - IDM_CONNECT_WIIMOTE1) | 0x100)->IsConnected();
-  ConnectWiimote(event.GetId() - IDM_CONNECT_WIIMOTE1, !is_connected);
-  Core::PauseAndLock(false, was_unpaused);
+  Core::RunAsCPUThread([&] {
+    const auto bt = std::static_pointer_cast<IOS::HLE::Device::BluetoothEmu>(
+        ios->GetDeviceByName("/dev/usb/oh1/57e/305"));
+    const unsigned int wiimote_index = event.GetId() - IDM_CONNECT_WIIMOTE1;
+    const bool is_connected = bt && bt->AccessWiiMote(wiimote_index | 0x100)->IsConnected();
+    Wiimote::Connect(wiimote_index, !is_connected);
+  });
 }
 
 // Toggle fullscreen. In Windows the fullscreen mode is accomplished by expanding the m_panel to
@@ -1603,15 +1583,15 @@ void CFrame::UpdateGUI()
   GetMenuBar()->FindItem(IDM_CONNECT_BALANCEBOARD)->Enable(ShouldEnableWiimotes);
   if (ShouldEnableWiimotes)
   {
-    bool was_unpaused = Core::PauseAndLock(true);
-    GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE1)->Check(bt->AccessWiiMote(0x0100)->IsConnected());
-    GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE2)->Check(bt->AccessWiiMote(0x0101)->IsConnected());
-    GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE3)->Check(bt->AccessWiiMote(0x0102)->IsConnected());
-    GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE4)->Check(bt->AccessWiiMote(0x0103)->IsConnected());
-    GetMenuBar()
-        ->FindItem(IDM_CONNECT_BALANCEBOARD)
-        ->Check(bt->AccessWiiMote(0x0104)->IsConnected());
-    Core::PauseAndLock(false, was_unpaused);
+    Core::RunAsCPUThread([&] {
+      GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE1)->Check(bt->AccessWiiMote(0x0100)->IsConnected());
+      GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE2)->Check(bt->AccessWiiMote(0x0101)->IsConnected());
+      GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE3)->Check(bt->AccessWiiMote(0x0102)->IsConnected());
+      GetMenuBar()->FindItem(IDM_CONNECT_WIIMOTE4)->Check(bt->AccessWiiMote(0x0103)->IsConnected());
+      GetMenuBar()
+          ->FindItem(IDM_CONNECT_BALANCEBOARD)
+          ->Check(bt->AccessWiiMote(0x0104)->IsConnected());
+    });
   }
 
   GetMenuBar()->FindItem(IDM_RECORD_READ_ONLY)->Enable(Running || Paused);

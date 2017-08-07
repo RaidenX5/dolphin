@@ -11,11 +11,13 @@
 #include "Common/CommonTypes.h"
 #include "Common/LinearDiskCache.h"
 #include "VideoBackends/Vulkan/Constants.h"
-#include "VideoBackends/Vulkan/ObjectCache.h"
+#include "VideoBackends/Vulkan/ShaderCache.h"
 #include "VideoCommon/GeometryShaderGen.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/PixelShaderGen.h"
 #include "VideoCommon/RenderBase.h"
+#include "VideoCommon/UberShaderPixel.h"
+#include "VideoCommon/UberShaderVertex.h"
 #include "VideoCommon/VertexShaderGen.h"
 
 namespace Vulkan
@@ -60,6 +62,7 @@ public:
   void SetBlendState(const BlendingState& state);
 
   bool CheckForShaderChanges(u32 gx_primitive_type);
+  void ClearShaders();
 
   void UpdateVertexShaderConstants();
   void UpdateGeometryShaderConstants();
@@ -117,7 +120,10 @@ public:
   bool IsWithinRenderArea(s32 x, s32 y, u32 width, u32 height) const;
 
   // Reloads the UID cache, ensuring all pipelines used by the game so far have been created.
-  void LoadPipelineUIDCache();
+  void ReloadPipelineUIDCache();
+
+  // Clears shader pointers, ensuring that now-deleted modules are not used.
+  void InvalidateShaderPointers();
 
 private:
   // Serialized version of PipelineInfo, used when loading/saving the pipeline UID cache.
@@ -156,8 +162,8 @@ private:
     DIRTY_FLAG_DESCRIPTOR_SET_BINDING = (1 << 11),
     DIRTY_FLAG_PIPELINE_BINDING = (1 << 12),
 
-    DIRTY_FLAG_ALL_DESCRIPTOR_SETS =
-        DIRTY_FLAG_VS_UBO | DIRTY_FLAG_GS_UBO | DIRTY_FLAG_PS_SAMPLERS | DIRTY_FLAG_PS_SSBO
+    DIRTY_FLAG_ALL_DESCRIPTOR_SETS = DIRTY_FLAG_VS_UBO | DIRTY_FLAG_GS_UBO | DIRTY_FLAG_PS_UBO |
+                                     DIRTY_FLAG_PS_SAMPLERS | DIRTY_FLAG_PS_SSBO
   };
 
   bool Initialize();
@@ -175,9 +181,15 @@ private:
 
   // Obtains a Vulkan pipeline object for the specified pipeline configuration.
   // Also adds this pipeline configuration to the UID cache if it is not present already.
-  VkPipeline GetPipelineAndCacheUID(const PipelineInfo& info);
+  VkPipeline GetPipelineAndCacheUID();
+
+  // Are bounding box ubershaders enabled? If so, we need to ensure the SSBO is set up,
+  // since the bbox writes are determined by a uniform.
+  bool IsSSBODescriptorRequired() const;
 
   bool UpdatePipeline();
+  void UpdatePipelineLayout();
+  void UpdatePipelineVertexFormat();
   bool UpdateDescriptorSet();
 
   // Allocates storage in the uniform buffer of the specified size. If this storage cannot be
@@ -200,10 +212,14 @@ private:
   VertexShaderUid m_vs_uid = {};
   GeometryShaderUid m_gs_uid = {};
   PixelShaderUid m_ps_uid = {};
+  UberShader::VertexShaderUid m_uber_vs_uid = {};
+  UberShader::PixelShaderUid m_uber_ps_uid = {};
+  bool m_using_ubershaders = false;
 
   // pipeline state
   PipelineInfo m_pipeline_state = {};
   VkPipeline m_pipeline_object = VK_NULL_HANDLE;
+  const VertexFormat* m_vertex_format = nullptr;
 
   // shader bindings
   std::array<VkDescriptorSet, NUM_DESCRIPTOR_SET_BIND_POINTS> m_descriptor_sets = {};

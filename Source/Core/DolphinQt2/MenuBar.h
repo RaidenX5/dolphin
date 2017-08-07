@@ -16,6 +16,15 @@ class MenuBar final : public QMenuBar
 public:
   explicit MenuBar(QWidget* parent = nullptr);
 
+  void EmulationStarted();
+  void EmulationPaused();
+  void EmulationStopped();
+  void UpdateStateSlotMenu();
+  void UpdateToolsMenu(bool emulation_started);
+
+  // Tools
+  void InstallWAD();
+
 signals:
   // File
   void Open();
@@ -44,24 +53,20 @@ signals:
   void PerformOnlineUpdate(const std::string& region);
 
   // Options
+  void Configure();
+  void ConfigureGraphics();
+  void ConfigureAudio();
+  void ConfigureControllers();
   void ConfigureHotkeys();
 
   // View
-  void ShowTable();
   void ShowList();
+  void ShowGrid();
   void ColumnVisibilityToggled(const QString& row, bool visible);
+  void GameListPlatformVisibilityToggled(const QString& row, bool visible);
+  void GameListRegionVisibilityToggled(const QString& row, bool visible);
 
   void ShowAboutDialog();
-
-public slots:
-  void EmulationStarted();
-  void EmulationPaused();
-  void EmulationStopped();
-  void UpdateStateSlotMenu();
-  void UpdateToolsMenu(bool emulation_started);
-
-  // Tools
-  void InstallWAD();
 
 private:
   void AddFileMenu();
@@ -73,7 +78,9 @@ private:
 
   void AddViewMenu();
   void AddGameListTypeSection(QMenu* view_menu);
-  void AddTableColumnsMenu(QMenu* view_menu);
+  void AddListColumnsMenu(QMenu* view_menu);
+  void AddShowPlatformsMenu(QMenu* view_menu);
+  void AddShowRegionsMenu(QMenu* view_menu);
 
   void AddOptionsMenu();
   void AddToolsMenu();
