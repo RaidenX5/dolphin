@@ -24,6 +24,7 @@ android {
         versionCode 13
 
         versionName "${getVersion()}"
+        project.ext.set("archivesBaseName", "Dolphin-" + defaultConfig.versionName);
     }
 
     signingConfigs {
