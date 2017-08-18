@@ -245,6 +245,7 @@ BEGIN_EVENT_TABLE(CFrame, CRenderFrame)
 EVT_MENU_RANGE(IDM_FLOAT_LOG_WINDOW, IDM_FLOAT_CODE_WINDOW, CFrame::OnFloatWindow)
 
 // Game list context menu
+EVT_MENU(IDM_LIST_PERFORM_DISC_UPDATE, CFrame::OnPerformDiscWiiUpdate)
 EVT_MENU(IDM_LIST_INSTALL_WAD, CFrame::OnInstallWAD)
 EVT_MENU(IDM_LIST_UNINSTALL_WAD, CFrame::OnUninstallWAD)
 
@@ -448,6 +449,10 @@ CFrame::CFrame(wxFrame* parent, wxWindowID id, const wxString& title, wxRect geo
   m_poll_hotkey_timer.SetOwner(this);
   Bind(wxEVT_TIMER, &CFrame::PollHotkeys, this, m_poll_hotkey_timer.GetId());
   m_poll_hotkey_timer.Start(1000 / 60, wxTIMER_CONTINUOUS);
+
+  m_cursor_timer.SetOwner(this);
+  Bind(wxEVT_TIMER, &CFrame::HandleCursorTimer, this, m_cursor_timer.GetId());
+  m_cursor_timer.StartOnce(MOUSE_HIDE_DELAY);
 
   // Shut down cleanly on SIGINT, SIGTERM (Unix) and on various signals on Windows
   m_handle_signal_timer.SetOwner(this);
@@ -1138,6 +1143,13 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 
 void CFrame::OnMouse(wxMouseEvent& event)
 {
+  if (!SConfig::GetInstance().bHideCursor && main_frame->RendererHasFocus() &&
+      Core::GetState() == Core::State::Running)
+  {
+    m_render_parent->SetCursor(wxNullCursor);
+    m_cursor_timer.StartOnce(MOUSE_HIDE_DELAY);
+  }
+
   // next handlers are all for FreeLook, so we don't need to check them if disabled
   if (!g_Config.bFreeLook)
   {
@@ -1446,7 +1458,7 @@ void CFrame::ParseHotkeys()
   if (IsHotkey(HK_DECREASE_IR))
   {
     OSDChoice = 1;
-    if (Config::Get(Config::GFX_EFB_SCALE) > SCALE_AUTO)
+    if (Config::Get(Config::GFX_EFB_SCALE) > EFB_SCALE_AUTO_INTEGRAL)
       Config::SetCurrent(Config::GFX_EFB_SCALE, Config::Get(Config::GFX_EFB_SCALE) - 1);
   }
   if (IsHotkey(HK_TOGGLE_CROP))
@@ -1711,6 +1723,13 @@ void CFrame::HandleFrameSkipHotkeys()
     holdFrameStep = false;
     holdFrameStepDelayCount = 0;
   }
+}
+
+void CFrame::HandleCursorTimer(wxTimerEvent& event)
+{
+  if (!SConfig::GetInstance().bHideCursor && main_frame->RendererHasFocus() &&
+      Core::GetState() == Core::State::Running)
+    m_render_parent->SetCursor(wxCURSOR_BLANK);
 }
 
 void CFrame::HandleSignal(wxTimerEvent& event)

@@ -19,7 +19,7 @@ class GameList final : public QStackedWidget
 
 public:
   explicit GameList(QWidget* parent = nullptr);
-  QString GetSelectedGame() const;
+  QSharedPointer<GameFile> GetSelectedGame() const;
 
   void SetListView() { SetPreferredView(true); }
   void SetGridView() { SetPreferredView(false); }
@@ -31,6 +31,7 @@ signals:
   void GameSelected();
   void EmulationStarted();
   void EmulationStopped();
+  void NetPlayHost(const QString& game_id);
 
 private:
   void ShowContextMenu(const QPoint&);

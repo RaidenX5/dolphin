@@ -56,7 +56,11 @@ void VideoConfig::Refresh()
   iAdapter = Config::Get(Config::GFX_ADAPTER);
 
   bWidescreenHack = Config::Get(Config::GFX_WIDESCREEN_HACK);
-  iAspectRatio = Config::Get(Config::GFX_ASPECT_RATIO);
+  const int aspect_ratio = Config::Get(Config::GFX_ASPECT_RATIO);
+  if (aspect_ratio == ASPECT_AUTO)
+    iAspectRatio = Config::Get(Config::GFX_SUGGESTED_ASPECT_RATIO);
+  else
+    iAspectRatio = aspect_ratio;
   bCrop = Config::Get(Config::GFX_CROP);
   bUseXFB = Config::Get(Config::GFX_USE_XFB);
   bUseRealXFB = Config::Get(Config::GFX_USE_REAL_XFB);
@@ -138,26 +142,6 @@ void VideoConfig::Refresh()
   phack.m_znear = Config::Get(Config::GFX_PROJECTION_HACK_ZNEAR);
   phack.m_zfar = Config::Get(Config::GFX_PROJECTION_HACK_ZFAR);
   bPerfQueriesEnable = Config::Get(Config::GFX_PERF_QUERIES_ENABLE);
-
-  if (iEFBScale == SCALE_FORCE_INTEGRAL)
-  {
-    // Round down to multiple of native IR
-    switch (Config::GetBase(Config::GFX_EFB_SCALE))
-    {
-    case SCALE_AUTO:
-      iEFBScale = SCALE_AUTO_INTEGRAL;
-      break;
-    case SCALE_1_5X:
-      iEFBScale = SCALE_1X;
-      break;
-    case SCALE_2_5X:
-      iEFBScale = SCALE_2X;
-      break;
-    default:
-      iEFBScale = Config::GetBase(Config::GFX_EFB_SCALE);
-      break;
-    }
-  }
 
   VerifyValidity();
 }

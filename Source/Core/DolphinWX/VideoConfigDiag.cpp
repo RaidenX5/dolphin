@@ -25,6 +25,7 @@
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
 #include "Common/SysConf.h"
+#include "Core/Config/SYSCONFSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "DolphinWX/DolphinSlider.h"
@@ -186,10 +187,8 @@ static wxString borderless_fullscreen_desc = wxTRANSLATE(
 static wxString internal_res_desc =
     wxTRANSLATE("Specifies the resolution used to render at. A high resolution greatly improves "
                 "visual quality, but also greatly increases GPU load and can cause issues in "
-                "certain games.\n\"Multiple of 640x528\" will result in a size slightly larger "
-                "than \"Window Size\" but yield fewer issues. Generally speaking, the lower the "
-                "internal resolution is, the better your performance will be. Auto (Window Size), "
-                "1.5x, and 2.5x may cause issues in some games.\n\nIf unsure, select Native.");
+                "certain games. Generally speaking, the lower the internal resolution is, the "
+                "better your performance will be.\n\nIf unsure, select Native.");
 static wxString efb_access_desc =
     wxTRANSLATE("Ignore any requests from the CPU to read from or write to the EFB.\nImproves "
                 "performance in some games, but might disable some gameplay-related features or "
@@ -459,7 +458,7 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
         szr_other->Add(CreateCheckBoxRefBool(page_general, _("Keep Window on Top"),
                                              wxGetTranslation(keep_window_on_top_desc),
                                              SConfig::GetInstance().bKeepWindowOnTop));
-        szr_other->Add(CreateCheckBoxRefBool(page_general, _("Hide Mouse Cursor"),
+        szr_other->Add(CreateCheckBoxRefBool(page_general, _("Always Hide Mouse Cursor"),
                                              wxGetTranslation(hide_mouse_cursor_desc),
                                              SConfig::GetInstance().bHideCursor));
         szr_other->Add(render_to_main_checkbox =
@@ -517,27 +516,20 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
 
     // Internal resolution
     {
-      const wxString efbscale_choices[] = {_("Auto (Window Size)"),
-                                           _("Auto (Multiple of 640x528)"),
-                                           _("Native (640x528)"),
-                                           _("1.5x Native (960x792)"),
-                                           _("2x Native (1280x1056) for 720p"),
-                                           _("2.5x Native (1600x1320)"),
-                                           _("3x Native (1920x1584) for 1080p"),
-                                           _("4x Native (2560x2112) for 1440p"),
-                                           _("5x Native (3200x2640)"),
-                                           _("6x Native (3840x3168) for 4K"),
-                                           _("7x Native (4480x3696)"),
-                                           _("8x Native (5120x4224) for 5K"),
-                                           _("Custom")};
+      const wxString efbscale_choices[] = {
+          _("Auto (Multiple of 640x528)"),      _("Native (640x528)"),
+          _("2x Native (1280x1056) for 720p"),  _("3x Native (1920x1584) for 1080p"),
+          _("4x Native (2560x2112) for 1440p"), _("5x Native (3200x2640)"),
+          _("6x Native (3840x3168) for 4K"),    _("7x Native (4480x3696)"),
+          _("8x Native (5120x4224) for 5K"),    _("Custom")};
 
       wxChoice* const choice_efbscale = CreateChoice(
           page_enh, Config::GFX_EFB_SCALE, wxGetTranslation(internal_res_desc),
-          (vconfig.iEFBScale > 11) ? ArraySize(efbscale_choices) : ArraySize(efbscale_choices) - 1,
+          (vconfig.iEFBScale > 8) ? ArraySize(efbscale_choices) : ArraySize(efbscale_choices) - 1,
           efbscale_choices);
 
-      if (vconfig.iEFBScale > 11)
-        choice_efbscale->SetSelection(12);
+      if (vconfig.iEFBScale > 8)
+        choice_efbscale->SetSelection(9);
 
       szr_enh->Add(new wxStaticText(page_enh, wxID_ANY, _("Internal Resolution:")),
                    wxGBPosition(row, 0), wxDefaultSpan, wxALIGN_CENTER_VERTICAL);
@@ -926,7 +918,8 @@ VideoConfigDiag::VideoConfigDiag(wxWindow* parent, const std::string& title)
         progressive_scan_checkbox->Bind(wxEVT_CHECKBOX, &VideoConfigDiag::Event_ProgressiveScan,
                                         this);
 
-        progressive_scan_checkbox->SetValue(SConfig::GetInstance().bProgressive);
+        // TODO: split this into two different settings, one for Wii and one for GC?
+        progressive_scan_checkbox->SetValue(Config::Get(Config::SYSCONF_PROGRESSIVE_SCAN));
         szr_misc->Add(progressive_scan_checkbox);
       }
 
@@ -1036,7 +1029,7 @@ void VideoConfigDiag::Event_DisplayResolution(wxCommandEvent& ev)
 
 void VideoConfigDiag::Event_ProgressiveScan(wxCommandEvent& ev)
 {
-  SConfig::GetInstance().bProgressive = ev.IsChecked();
+  Config::SetBase(Config::SYSCONF_PROGRESSIVE_SCAN, ev.IsChecked());
   ev.Skip();
 }
 
@@ -1120,7 +1113,7 @@ void VideoConfigDiag::OnUpdateUI(wxUpdateUIEvent& ev)
   cache_hires_textures->Enable(vconfig.bHiresTextures);
 
   // Vertex rounding
-  vertex_rounding_checkbox->Enable(vconfig.iEFBScale != SCALE_1X);
+  vertex_rounding_checkbox->Enable(vconfig.iEFBScale != 1);
 
   // Repopulating the post-processing shaders can't be done from an event
   if (choice_ppshader && choice_ppshader->IsEmpty())

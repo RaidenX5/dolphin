@@ -32,11 +32,13 @@
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/Config/Config.h"
 #include "Common/FifoQueue.h"
 #include "Common/FileUtil.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 
+#include "Core/Config/SYSCONFSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/HW/EXI/EXI_Device.h"
 #include "Core/NetPlayClient.h"
@@ -316,8 +318,8 @@ void NetPlayDialog::GetNetSettings(NetSettings& settings)
   settings.m_EnableCheats = instance.bEnableCheats;
   settings.m_SelectedLanguage = instance.SelectedLanguage;
   settings.m_OverrideGCLanguage = instance.bOverrideGCLanguage;
-  settings.m_ProgressiveScan = instance.bProgressive;
-  settings.m_PAL60 = instance.bPAL60;
+  settings.m_ProgressiveScan = Config::Get(Config::SYSCONF_PROGRESSIVE_SCAN);
+  settings.m_PAL60 = Config::Get(Config::SYSCONF_PAL60);
   settings.m_DSPHLE = instance.bDSPHLE;
   settings.m_DSPEnableJIT = instance.m_DSPEnableJIT;
   settings.m_WriteToMemcard = m_memcard_write->GetValue();
@@ -457,19 +459,19 @@ void NetPlayDialog::OnConnectionLost()
   GetEventHandler()->AddPendingEvent(evt);
 }
 
-void NetPlayDialog::OnTraversalError(int error)
+void NetPlayDialog::OnTraversalError(TraversalClient::FailureReason error)
 {
   switch (error)
   {
-  case TraversalClient::BadHost:
+  case TraversalClient::FailureReason::BadHost:
     PanicAlertT("Couldn't look up central server");
     break;
-  case TraversalClient::VersionTooOld:
+  case TraversalClient::FailureReason::VersionTooOld:
     PanicAlertT("Dolphin is too old for traversal server");
     break;
-  case TraversalClient::ServerForgotAboutUs:
-  case TraversalClient::SocketSendError:
-  case TraversalClient::ResendTimeout:
+  case TraversalClient::FailureReason::ServerForgotAboutUs:
+  case TraversalClient::FailureReason::SocketSendError:
+  case TraversalClient::FailureReason::ResendTimeout:
     wxThreadEvent evt(wxEVT_THREAD, NP_GUI_EVT_TRAVERSAL_CONNECTION_ERROR);
     GetEventHandler()->AddPendingEvent(evt);
     break;
@@ -579,7 +581,7 @@ void NetPlayDialog::OnThread(wxThreadEvent& event)
   break;
   case NP_GUI_EVT_PAD_BUFFER_CHANGE:
   {
-    std::string msg = StringFromFormat("Pad buffer: %d", m_pad_buffer);
+    std::string msg = StringFromFormat("Buffer size: %d", m_pad_buffer);
 
     if (g_ActiveConfig.bShowNetPlayMessages)
     {

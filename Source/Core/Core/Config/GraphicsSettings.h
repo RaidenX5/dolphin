@@ -4,12 +4,18 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "Common/Config/Config.h"
 
 namespace Config
 {
+std::optional<int> ConvertFromLegacyEFBScale(int efb_scale);
+std::optional<int> ConvertFromLegacyEFBScale(const std::string& efb_scale);
+int ConvertToLegacyEFBScale(int efb_scale);
+std::optional<int> ConvertToLegacyEFBScale(const std::string& efb_scale);
+
 // Configuration Information
 
 // Graphics.Hardware
@@ -21,6 +27,7 @@ extern const ConfigInfo<int> GFX_ADAPTER;
 
 extern const ConfigInfo<bool> GFX_WIDESCREEN_HACK;
 extern const ConfigInfo<int> GFX_ASPECT_RATIO;
+extern const ConfigInfo<int> GFX_SUGGESTED_ASPECT_RATIO;
 extern const ConfigInfo<bool> GFX_CROP;
 extern const ConfigInfo<bool> GFX_USE_XFB;
 extern const ConfigInfo<bool> GFX_USE_REAL_XFB;
